@@ -1,0 +1,11 @@
+name: discord-cr
+version: 0.1.0
+
+authors:
+  -  <Krognol>
+
+license: MIT
+
+dependencies:
+  discord-cr:
+    github: [krognol]/discord-cr

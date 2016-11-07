@@ -4,13 +4,18 @@ require "colorize"
 require "fiber"
 require "random"
 require "math"
+require "./gateway"
 
 def logInfo(text : String)
     puts "[INFO]".colorize(:yellow).toggle(true).to_s + " :: " + text + "\r\n"
 end
 
 def logWarning(text : String)
-    puts "[WARNING]".colorize(:red).toggle(true).to_s + " :: " + text + " \r\n"
+    puts "[WARNING]".colorize(:light_red).toggle(true).to_s + " :: " + text + "\r\n"
+end
+
+def logFatal(text : String)
+    puts "[!FATAL!]".colorize(:red).toggle(true).to_s + " :: " + text + "\r\n"
 end
 
 def logSuccess(text : String)
@@ -33,65 +38,7 @@ GUILDS = API_BASE + "/guilds"
 CHANNELS = API_BASE + "/channels"
 APPLICATIONS = API_BASE + "/oauth2/applications"
 
-class Gateway
-    JSON.mapping(
-        url: String
-    )
-end
 
-class Heartbeat
-	JSON.mapping(
-		op: Int32,
-		d: Int32
-	)
-
-	def initialize(@op : Int32, @d : Int32)
-	end
-end
-
-class HearbeatACK
-	JSON.mapping(
-		op: Int32
-	)
-end
-
-class Hello
-	JSON.mapping(
-		hearbeat_interval: Int32,
-		_trace: Array(String)
-	)	
-end
-
-class Properties
-	JSON.mapping({
-		os: {type: String},
-		browser: {type: String},
-		device: {type: String},
-		referrer: {type: String},
-		referring_domain: {type: String},
-    })
-	
-	def initialize(@os : String, @browser : String, @device : String, @referrer : String, @referring_domain : String)
-	end
-end
-
-class Identify
-	JSON.mapping({
-		token: {type: String},
-		properties: {type: Properties},
-		compress: {type: Bool},
-		large_threshold: {type: Int32},
-		shard: {type: Array(Int32)},
-    })
-
-	def initialize(@token : String, @properties : Properties, @compress : Bool, @large_threshold : Int32, @shard : Array(Int32))		
-	end
-end
-
-def getGateway()
-    response = HTTP::Client.get(GATEWAY)
-    return Gateway.from_json(response.body)
-end
 
 def jsonOrText(res : HTTP::Client::Response)
     logInfo("Content-type: #{res.headers["content-type"]}")
@@ -110,36 +57,29 @@ class DSClient
     user_agent = "Crystal/0.19.4"
     @user_agent = user_agent
     end
-
-    def request(method : String, url : String, kwargs : HTTP::Headers)
+    def token
+        return @token
+    end
+    def request(method : String, url : String, args : HTTP::Headers)
         headers = HTTP::Headers{"User-Agent" => @user_agent}
 
         if @token != ""
             headers["Authorization"] = "#{@token}"
-            logInfo("Authorization: Bearer #{@token}")
         end
 
-        if kwargs.has_key?("json")
+        if args.has_key?("json")
             headers["Content-Type"] = "application/json"
-            #kwargs["data"] = kwargs["json"].to_json
-            #kwargs.delete("json")
-        end
-
-        #kwargs["headers"] = headers
-        #h = kwargs["data"]        
-        
-        logInfo("Url #{url}")
-        logInfo("Headers: #{headers.to_s}")
+        end    
             
         res = nil
-        if kwargs.has_key?("json")            
-            logInfo("Json: #{kwargs["json"]}")
-            res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: kwargs["json"])
+        if args.has_key?("json")
+            logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}, Body: #{args["json"]}")
+            res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: args["json"])
         else
-            res = HTTP::Client.exec(method, URI.parse(url), kwargs)
+            logRequest("Method: #{method}, Url: #{url}, Headers: #{args}")
+            res = HTTP::Client.exec(method, URI.parse(url), args)
         end            
-        data = jsonOrText(res)
-        logInfo("Data: #{data}")
+        data = jsonOrText(res)        
         if 300 > res.status_code >= 200
             logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
             return data
@@ -209,13 +149,60 @@ class DSClient
         self._token(data["token"].as_s, "")
     end
 
+    def staticLogin(token : String, bot : String)
+        old_token = @token
+        old_bot = @bot_token
+        self._token(token, bot)
+
+        data = self.get(ME, nil).as(JSON::Any)
+        return data
+    end
+
+    def logout
+        return self.post(LOGOUT, nil)
+    end
+
+    def privateMessage(user : User)
+        payload = HTTP::Headers.new
+        payload["json"] = {"recipient_id": user.id}.to_json
+        return self.post(ME+"/channels", payload)
+    end
+
     def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
         url = "#{CHANNELS}/#{channel}/messages"
         r = Random.new                
         payload = HTTP::Headers.new
         payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
-        
-
         return self.post(url, payload)
+    end
+
+    def sendTyping(channel_id : String)
+        url = "#{CHANNELS}/#{channel_id}/typing"
+        return self.post(url, nil)
+    end
+
+    def connect
+        cg = ClientGateway.new
+        ws = cg.wsFromClient(self, false) do |something|
+            puts something
+        end
+        
+        while true
+            ws.as(HTTP::WebSocket).on_message do |msg|                
+                cg.handleSocketMessage(msg) do |handled|
+                    if typeof(handled) == Message
+                        m = handled.as(Message)
+                        if m.content.starts_with?(">>")
+                            self.sendMessage(m.channel_id, "<<", "", false)
+                        end
+                    end
+                end
+            end
+
+            ws.as(HTTP::WebSocket).on_close do |close|
+                puts close 
+            end
+            ws.as(HTTP::WebSocket).run
+        end
     end
 end

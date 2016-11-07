@@ -1,11 +1,12 @@
 require "json"
-require "time"
+#require "time"
 require "./users"
+require "./permissions"
 
 class Overwrite
     JSON.mapping(
         id: String,
-        Type: String,
+        type: String,
         allow: Int32,
         deny: Int32
     )
@@ -84,10 +85,10 @@ end
 class Embed
     JSON.mapping(
         title: String,
-        Type: String,
+        type: String,
         description: String,
         url: String,
-        timestamp: Time.date,
+        timestamp: String,
         color: Int32,
         footer: Footer,
         image: Image,
@@ -104,7 +105,7 @@ class GuildChannel
         id: String,
         guild_id: String,
         name: String,
-        Type: String,
+        type: String,
         position: Int32,
         is_private: Bool,
         permission_overwrites: Array(Overwrite),
@@ -119,27 +120,27 @@ class DMChannel
     JSON.mapping(
         id: String,
         is_private: Bool,
-        recipient: users.User,
+        recipient: User,
         last_message_id: String
     )
 end
 
 class Message
-    JSON.mapping(
-        id: String,
-        channel_id: String,
-        author: users.User,
-        content: String,
-        timestamp: Time.date,
-        edited_timestamp: Time.date,
-        tts: Bool,
-        mention_everyone: Bool,
-        mentions: Array(user.User),
-        mention_roles: Array(persmissions.Role),
-        attachments: Array(Attachment),
-        embeds: Array(Embed),
-        nonce: String,
-        pinned: Bool,
-        webhook_id: String
-    )
+    JSON.mapping({
+        id: {type: String},
+        channel_id: {type: String},
+        author: {type: User},
+        content: {type: String},
+        timestamp: {type: String},
+        edited_timestamp: {type: String, nilable: true},
+        tts: {type: Bool},
+        mention_everyone: {type: Bool},
+        mentions: {type: Array(User)},
+        mention_roles: {type: Array(Role)},
+        attachments: {type: Array(Attachment)},
+        embeds: {type: Array(Embed)},
+        nonce: {type: String},
+        pinned: {type: Bool},
+        #webhook_id: {type: String, defualt: ""}
+    })
 end

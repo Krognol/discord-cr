@@ -94,67 +94,83 @@ def getGateway()
 end
 
 def jsonOrText(res : HTTP::Client::Response)
-    text = res.body
+    logInfo("Content-type: #{res.headers["content-type"]}")
     if res.headers["content-type"] == "application/json"
-        return JSON.parse(text)
+        js = JSON.parse(res.body.to_s)
+        logInfo("Response: #{js}")
+        return js
     end
-    return text
+    return res.body.to_s
 end
 
 
 class DSClient
     @user_agent : String
     def initialize(@connector : String, @session : HTTP::Client, @token : String, @bot_token : String)
-    user_agent = "DiscordBot Crystal/0.19.4"
+    user_agent = "Crystal/0.19.4"
     @user_agent = user_agent
     end
 
     def request(method : String, url : String, kwargs : HTTP::Headers)
         headers = HTTP::Headers{"User-Agent" => @user_agent}
 
-        if @token != nil
-            headers["Authorization"] = "Bot #{@token}"
+        if @token != ""
+            headers["Authorization"] = "#{@token}"
+            logInfo("Authorization: Bearer #{@token}")
         end
 
         if kwargs.has_key?("json")
             headers["Content-Type"] = "application/json"
-            kwargs["data"] = kwargs["json"].to_json
+            #kwargs["data"] = kwargs["json"].to_json
+            #kwargs.delete("json")
         end
 
-        kwargs.merge!(headers)
+        #kwargs["headers"] = headers
+        #h = kwargs["data"]        
+        
+        logInfo("Url #{url}")
+        logInfo("Headers: #{headers.to_s}")
+            
+        res = nil
+        if kwargs.has_key?("json")            
+            logInfo("Json: #{kwargs["json"]}")
+            res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: kwargs["json"])
+        else
+            res = HTTP::Client.exec(method, URI.parse(url), kwargs)
+        end            
+        data = jsonOrText(res)
+        logInfo("Data: #{data}")
+        if 300 > res.status_code >= 200
+            logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
+            return data
+        end
 
-        5.times do |i|
-            res = @session.exec(method, url, kwargs)
-            data = jsonOrText(res)
-            if 300 > res.status_code >= 200
-                logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
-                return data
-            end
+        if res.status_code == 429
+            dat = data.as(JSON::Any)
+            d = dat["retry_after"].to_s
+            i = d.to_i
+            i = i / 1000
+            fmt = "We are being rate limited. Retrying in #{i.to_s} seconds."
 
-            if res.status_code == 429
-                d = data["retry_after"].to_s
-                i = d.to_i / 1000
-                fmt = "We are being rate limited. Retrying in #{i.to_s} seconds."
-
-                spawn do
-                    sleep i.seconds
-                end
-            end
-
-            if res.status_code == 502 && i <= 5
-                spawn do
-                    sleep (1 + i * 2).milliseconds
-                end
-            end
-
-            if res.status_code == 403
-                logWarning("Access forbidden #{data}")
-            elsif res.status_code == 404
-                logWarning("Page not found #{data}")
-            else
-                logWarning("Unknown HTTP error #{data}")
+            spawn do
+                sleep Time.new(i.as(Int32)).second
             end
         end
+
+        if res.status_code == 502
+            logWarning("Gateway unavailable")
+        end
+
+        if res.status_code == 403
+            logWarning("Access forbidden #{data}")
+        elsif res.status_code == 404
+            logWarning("Page not found #{data}")
+        elsif res.status_code == 401
+            logWarning("Unauthorized #{data}")
+        else
+            logWarning("Unknown HTTP error #{data}")
+        end
+        
     end
 
     def get(url : String, headers : HTTP::Headers)
@@ -187,19 +203,18 @@ class DSClient
     end
 
     def emailLogin(email : String, password : String)
-        payload = HTTP::Headers{"email" => email, "password" => password}
-        data = self.post(LOGIN, payload).as(JSON::Any)
+        payload = HTTP::Headers.new
+        payload["json"] = {"email": email, "password": password}.to_json
+        data = self.post(LOGIN, payload).as(JSON::Any)        
         self._token(data["token"].as_s, "")
     end
 
     def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
-        url = "#{CHANNELS}/#{channel}/message"
+        url = "#{CHANNELS}/#{channel}/messages"
         r = Random.new                
-        payload = HTTP::Headers{"content" => msg, "nonce" => r.next_int.to_s}
-
-        if tts
-            payload["tts"] = true
-        end
+        payload = HTTP::Headers.new
+        payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
+        
 
         return self.post(url, payload)
     end

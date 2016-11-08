@@ -53,11 +53,135 @@ end
 
 class DSClient
     @user_agent : String
+    @cg : ClientGateway
+    
     def initialize(@connector : String, @session : HTTP::Client, @token : String, @bot_token : String)
-    user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
-    @user_agent = user_agent
+        user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
+        @user_agent = user_agent
+        @cg = ClientGateway.new
     end
     
+    def getGateway
+        response = HTTP::Client.get(GATEWAY)
+        return Gateway.from_json(response.body)
+    end
+
+    def sendAsJson(js : String)
+        return @ws.as(HTTP::WebSocket).send(js)
+    end
+
+    def getHeartbeat
+        return {"op": HEARTBEAT, "d": @seq}.to_json
+    end
+
+    def identify
+        payload = { "op": IDENTIFY, 
+                    "d": {
+                       "token": @token, 
+                       "properties": {
+                           "$os": "null", 
+                           "$browser": "discord-cr",
+                           "$device": "discord-cr",
+                           "$referrer": "",
+                           "$referring_domain": ""},
+                        "compress": true,
+                        "large_threshold": 250,
+                        "v": 1}
+                    }.to_json
+        return self.sendAsJson(payload)
+    end
+
+    def resume
+        payload = {"op": RESUME, "d": { "seq": @seq, "session_id": @session_id, "token": @token}}.to_json
+        return self.sendAsJson(payload)
+    end
+
+    def messageCreate(data : JSON::Any)
+        return Message.from_json(data.to_json)
+    end
+
+    def setupHeartbeats(hello : Hello)
+        logInfo("Stayin' alive...'")
+        stop = false
+        interval = hello.interval
+
+        spawn do
+            loop do
+                self.sendAsJson(getHeartbeat)
+                sleep hello.interval.millisecond
+            end
+        end
+    end
+
+    def handleSocketMessage(msg : String)
+        begin
+            js = JSON.parse(msg)
+
+            op = js["op"].as_i
+            d = js["d"]
+            
+            if js["s"].as_i?.not_nil!
+                @seq = js["s"].as_i
+            end
+            
+
+            if op == RECONNECT
+                logWarning("Got reconnect event; doing nothing. Reconnecting isn't implemented yet.")
+                return
+            end
+
+            if op == HEARTBEAT_ACK
+                return
+            end
+
+            if op == HEARTBEAT
+                beat = self.getHeartbeat()
+                return self.sendAsJson(beat)
+            end
+
+            if op == HELLO
+                hello = Hello.from_json(js.to_s)
+                setupHeartbeats(hello)
+            end
+            
+
+            if op == INVALIDATE_SESSION
+                @seq = 0
+                @session_id = ""
+                if d == true
+                    @ws.as(HTTP::WebSocket).close
+                    self.resume
+                end
+                return self.identify
+            end
+
+            if op == DISPATCH
+                event = js["t"]
+                handleDispatch(event, d)
+            end
+        rescue ex
+            logFatal(ex.message.as(String))            
+        end
+    end
+
+    def wsFromClient(client : DSClient, resume : Bool)
+        if @token == ""
+            token = @bot_token
+        else
+            token = client.token
+        end
+
+        ws = HTTP::WebSocket.new(getGateway.url)
+        logInfo("Created a new websocket")
+
+        if !resume
+            yield self.identify
+            logInfo("Sent the identify payload to create websocket connection")
+            return ws
+        end
+    end
+
+
     def token
         return @token
     end
@@ -65,6 +189,7 @@ class DSClient
     def bot_token
         return @bot_token
     end
+
     def request(method : String, url : String, args : HTTP::Headers)
         headers = HTTP::Headers{"User-Agent" => @user_agent}
 
@@ -198,35 +323,66 @@ class DSClient
         return self.post(url, nil)
     end
 
-    def connect
-        cg = ClientGateway.new
-        ws = cg.wsFromClient(self, false) do |something|
-            puts something
+    def on_message(msg : String)
+        begin
+            @cg.handleSocketMessage(msg)
+        rescue ex
+            logFatal(ex.message.as(String))
         end
-        # Don't actually do this
-        # It's bad practice
-        # for real
-        # THIS IS JUST FOR TESTING
-        while true
-            ws.as(HTTP::WebSocket).on_message do |msg|                
-                cg.handleSocketMessage(msg) do |handled|
-                    if handled.is_a?(Message)
-                        m = handled.as(Message)
-                        logInfo("Message recieved: #{m.content}")
-                        if m.content.starts_with?(">>")
-                            logInfo("message starts with '>>'")
-                            self.sendMessage(m.channel_id, "<<", "", false)
-                        end
-                    else
-                        logInfo(handled.to_s)
-                    end
-                end
-            end
+        
+    end
+    
+    def on_close(msg : String)
+        logWarning("Connectino lcose: #{msg}")
+    end
 
-            ws.as(HTTP::WebSocket).on_close do |close|
-                puts close 
+    def run(ws : HTTP::WebSocket)
+        loop do
+            begin
+                ws.run    
+            rescue ex
+                logFatal(ex.message.to_s)
             end
-            ws.as(HTTP::WebSocket).run
         end
     end
+
+    def handleDispatch(event : String, payload)
+        if event == "READY"
+            @seq = js["s"].as_i
+            @session_id = js["session_id"].as_s
+        end 
+                
+        if event == "MESSAGE_CREATE"
+            payload = Message.from_json(d.to_json)
+            call_event message_create, payload
+        end
+
+    end
+
+    def connect        
+        ws = @cg.wsFromClient(self, false) do |something|
+            puts something
+        end
+        ws.as(HTTP::WebSocket).on_message(&->on_message(String))
+        ws.as(HTTP::WebSocket).on_close(&->on_close(String))
+        self.run(ws.as(HTTP::WebSocket))
+    end
+
+    macro event(name, payload)
+        def on_{{name}}(&handler : {{payload}} -> )
+            (@on_{{name}}_handlers ||= [] of {{payload}} -> ) << handler
+        end
+    end
+
+    macro call_event(name, payload)
+        @on_{{name}}_handlers.try &.each do |handler|
+            begin
+                handler.call({{payload}})
+            rescue ex
+                logFatal(ex.message.to_s)
+            end
+        end
+    end
+
+    event message_create, Message
 end

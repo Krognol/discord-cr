@@ -206,6 +206,7 @@ class DSClient
         # Don't actually do this
         # It's bad practice
         # for real
+        # THIS IS JUST FOR TESTING
         while true
             ws.as(HTTP::WebSocket).on_message do |msg|                
                 cg.handleSocketMessage(msg) do |handled|

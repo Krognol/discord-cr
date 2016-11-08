@@ -54,18 +54,30 @@ end
 class DSClient
     @user_agent : String
     def initialize(@connector : String, @session : HTTP::Client, @token : String, @bot_token : String)
-    user_agent = "Crystal/0.19.4"
+    user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
     @user_agent = user_agent
     end
+    
     def token
         return @token
+    end
+
+    def bot_token
+        return @bot_token
     end
     def request(method : String, url : String, args : HTTP::Headers)
         headers = HTTP::Headers{"User-Agent" => @user_agent}
 
-        if @token != ""
-            headers["Authorization"] = "#{@token}"
+        
+        if @bot_token != ""
+            logInfo("bot token: #{@bot_token}")            
+            headers["Authorization"] = @bot_token
+            headers["Content-Type"] = "application/json"
+        elsif token != ""
+            headers["Authorization"] = @token
         end
+            
+        
 
         if args.has_key?("json")
             headers["Content-Type"] = "application/json"
@@ -76,8 +88,8 @@ class DSClient
             logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}, Body: #{args["json"]}")
             res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: args["json"])
         else
-            logRequest("Method: #{method}, Url: #{url}, Headers: #{args}")
-            res = HTTP::Client.exec(method, URI.parse(url), args)
+            logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}")
+            res = HTTP::Client.exec(method, URI.parse(url), headers)
         end            
         data = jsonOrText(res)        
         if 300 > res.status_code >= 200
@@ -149,6 +161,11 @@ class DSClient
         self._token(data["token"].as_s, "")
     end
 
+    def botLogin()
+        data = self.post(LOGIN, HTTP::Headers.new).as(JSON::Any)
+        self._token("", data["token"].as_s)
+    end
+
     def staticLogin(token : String, bot : String)
         old_token = @token
         old_bot = @bot_token
@@ -186,15 +203,21 @@ class DSClient
         ws = cg.wsFromClient(self, false) do |something|
             puts something
         end
-        
+        # Don't actually do this
+        # It's bad practice
+        # for real
         while true
             ws.as(HTTP::WebSocket).on_message do |msg|                
                 cg.handleSocketMessage(msg) do |handled|
-                    if typeof(handled) == Message
+                    if handled.is_a?(Message)
                         m = handled.as(Message)
+                        logInfo("Message recieved: #{m.content}")
                         if m.content.starts_with?(">>")
+                            logInfo("message starts with '>>'")
                             self.sendMessage(m.channel_id, "<<", "", false)
                         end
+                    else
+                        logInfo(handled.to_s)
                     end
                 end
             end

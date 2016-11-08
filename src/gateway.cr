@@ -95,6 +95,7 @@ class ClientGateway
     end
 
     def keepAlive(hello : Hello)
+        logInfo("Stayin' alive...'")
         stop = false
         interval = hello.interval
 
@@ -102,6 +103,7 @@ class ClientGateway
             begin
                 data = self.getHeartbeat
                 self.sendAsJson(data) do |beat|
+                    logInfo("Sent heartbeat: #{data}, #{beat}")
                     yield beat
                 end
             rescue ex
@@ -133,7 +135,7 @@ class ClientGateway
 
             if op == HEARTBEAT
                 beat = self.getHeartbeat()
-                self.sendAsJson(beat) do |beat|
+                self.sendAsJson(beat) do |sent|                    
                     yield beat
                 end
                 return
@@ -186,7 +188,11 @@ class ClientGateway
     end
 
     def wsFromClient(client : DSClient, resume : Bool)
-        @token = client.token
+        if client.token == ""
+            @token = client.bot_token
+        else
+            @token = client.token
+        end
         gateway = getGateway
         @ws = HTTP::WebSocket.new(gateway.url)
         logInfo("Created a new websocket")

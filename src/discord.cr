@@ -37,13 +37,12 @@ end
 
 module Discord
     class Client
-        @user_agent : String
         @hold_up : Float64
+        @api : RestAPI::API
         def initialize(@token : String, @bot_token : String)
-            user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
-            @user_agent = user_agent
             @ws = HTTP::WebSocket
             @hold_up = 1.0
+            @api = RestAPI::API.new("DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)", self)
         end
         
         def getGateway
@@ -159,102 +158,9 @@ module Discord
             end
         end
 
-        def request(method : String, url : String, args : HTTP::Headers)
-            headers = HTTP::Headers{"User-Agent" => @user_agent, "Content-Type" => "application/json"}
-
-            if @bot_token != ""
-                logInfo("bot token: #{@bot_token}")            
-                headers["Authorization"] = @bot_token
-            elsif @token != ""
-                headers["Authorization"] = @token
-            end
-
-            res = nil
-            if args.has_key?("json")
-                logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}, Body: #{args["json"]}")
-                res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: args["json"])
-            else
-                logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}")
-                res = HTTP::Client.exec(method, URI.parse(url), headers)
-            end            
-            data = jsonOrText(res)
-
-            if 300 > res.status_code >= 200
-                logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
-                return data
-            end
-
-            if res.status_code == 429
-                dat = data.as(JSON::Any)
-                d = dat["retry_after"].to_s
-                i = d.to_i
-                i = i / 1000
-                logWarning("We are being rate limited. Retrying in #{i.to_s} seconds.")
-
-                spawn do
-                    sleep Time.new(i.as(Int32)).second
-                end
-            end
-
-            if res.status_code == 502
-                logWarning("Gateway unavailable")
-            end
-
-            if res.status_code == 403
-                logWarning("Access forbidden #{data}")
-            elsif res.status_code == 404
-                logWarning("Page not found #{data}")
-            elsif res.status_code == 401
-                logWarning("Unauthorized #{data}")
-            else
-                logWarning("Unknown HTTP error #{data}")
-            end
-            
-        end
-
-        def get(url : String, headers : HTTP::Headers)
-            return self.request("GET", url, headers)
-        end
-
-        def put(url : String, headers : HTTP::Headers)
-            return self.request("PUT", url, headers)
-        end
-
-        def patch(url : String, headers : HTTP::Headers)
-            return self.request("PATCH", url, headers)
-        end
-
-        def delete(url : String, headers : HTTP::Headers)
-            return self.request("DELETE", url, headers)
-        end
-
-        def post(url : String, headers : HTTP::Headers)
-            return self.request("POST", url, headers)
-        end
-
-        def close
-            self.session.close
-        end
-
         def _token(token : String, bot : String)
             @token = token
             @bot_token = bot
-        end
-
-        def emailLogin(email : String, password : String)
-            payload = HTTP::Headers.new
-            payload["json"] = {"email": email, "password": password}.to_json
-            data = self.post(EndpointLogin, payload).as(JSON::Any)        
-            self._token(data["token"].as_s, "")
-        end
-
-        def botLogin
-            data = self.post(EndpointLogin, HTTP::Headers.new).as(JSON::Any)
-            self._token("", data["token"].as_s)
-        end
-        
-        def logout
-            return self.post(EndpointLogout, nil)
         end
 
         def on_message(msg : String)
@@ -385,25 +291,6 @@ module Discord
         def connect        
             wsFromClient(false)
             self.run
-        end
-
-        def sendPrivateMessage(user : Users::User)
-            payload = HTTP::Headers.new
-            payload["json"] = {"recipient_id": user.id}.to_json
-            return self.post(EndpointMe + "/channels", payload)
-        end
-
-        def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
-            url = channelMessages(channel)
-            r = Random.new                
-            payload = HTTP::Headers.new
-            payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
-            return self.post(url, payload)
-        end
-
-        def sendTyping(channel_id : String)
-            url = channelTyping(channel_id)
-            return self.post(url, nil)
         end
 
         macro event(name, payload)

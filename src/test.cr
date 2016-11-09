@@ -1,8 +1,8 @@
 require "./discord"
 
-client = DSClient.new("connector", HTTP::Client.new("wss://discordapp.gg"), "", "Bot iewjtnwnrteiwurbentuiewbrth")
-puts client.botLogin
-client.connect
+client = Discord::Client.new("connector", HTTP::Client.new("wss://discordapp.gg"), "", "Bot MjM0MDUwNDQ4ODE2OTk2MzYz.CwS8kg.2vGKfGA5-pKzxyOpIkSvSzXR9o8")
+client.botLogin
 client.on_message_create do |payload|
-    puts payload.content
+    logInfo("Message recieved: #{payload.content}")
 end
+client.connect

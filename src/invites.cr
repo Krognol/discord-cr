@@ -1,11 +1,12 @@
-require "users"
+require "./users"
 require "time"
 require "json"
+
 class InviteChannel
     JSON.mapping(
         id: String,
         name: String,
-        Type: String
+        type: String
     )
 end
 
@@ -27,12 +28,12 @@ end
 
 class InviteMetadata
     JSON.mapping(
-        inviter: users.User,
+        inviter: User,
         uses: Int32,
         max_uses: Int32,
         max_age: Int32,
         temporary: Bool,
-        created_at: Time.date,
+        created_at: String,
         revoked: Bool 
     )
 end

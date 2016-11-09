@@ -4,7 +4,7 @@ require "colorize"
 require "fiber"
 require "random"
 require "math"
-require "./gateway"
+require "./**"
 
 def logInfo(text : String)
     puts "[INFO]".colorize(:yellow).toggle(true).to_s + " :: " + text + "\r\n"
@@ -50,339 +50,423 @@ def jsonOrText(res : HTTP::Client::Response)
     return res.body.to_s
 end
 
-
-class DSClient
-    @user_agent : String
-    @cg : ClientGateway
-    
-    def initialize(@connector : String, @session : HTTP::Client, @token : String, @bot_token : String)
-        user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
-        @user_agent = user_agent
-        @cg = ClientGateway.new
-    end
-    
-    def getGateway
-        response = HTTP::Client.get(GATEWAY)
-        return Gateway.from_json(response.body)
-    end
-
-    def sendAsJson(js : String)
-        return @ws.as(HTTP::WebSocket).send(js)
-    end
-
-    def getHeartbeat
-        return {"op": HEARTBEAT, "d": @seq}.to_json
-    end
-
-    def identify
-        payload = { "op": IDENTIFY, 
-                    "d": {
-                       "token": @token, 
-                       "properties": {
-                           "$os": "null", 
-                           "$browser": "discord-cr",
-                           "$device": "discord-cr",
-                           "$referrer": "",
-                           "$referring_domain": ""},
-                        "compress": true,
-                        "large_threshold": 250,
-                        "v": 1}
-                    }.to_json
-        return self.sendAsJson(payload)
-    end
-
-    def resume
-        payload = {"op": RESUME, "d": { "seq": @seq, "session_id": @session_id, "token": @token}}.to_json
-        return self.sendAsJson(payload)
-    end
-
-    def messageCreate(data : JSON::Any)
-        return Message.from_json(data.to_json)
-    end
-
-    def setupHeartbeats(hello : Hello)
-        logInfo("Stayin' alive...'")
-        stop = false
-        interval = hello.interval
-
-        spawn do
-            loop do
-                self.sendAsJson(getHeartbeat)
-                sleep hello.interval.millisecond
-            end
+module Discord
+    class Client
+        @user_agent : String
+        @hold_up : Float64
+        def initialize(@connector : String, @session : HTTP::Client, @token : String, @bot_token : String)
+            user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
+            @user_agent = user_agent
+            @ws = HTTP::WebSocket
+            @hold_up = 1.0
         end
-    end
+        
+        def getGateway
+            response = HTTP::Client.get(GATEWAY)
+            return Gateway::Gateway.from_json(response.body)
+        end
 
-    def handleSocketMessage(msg : String)
-        begin
-            js = JSON.parse(msg)
+        def sendAsJson(js : String)
+            return @ws.as(HTTP::WebSocket).send(js)
+        end
 
-            op = js["op"].as_i
-            d = js["d"]
-            
-            if js["s"].as_i?.not_nil!
-                @seq = js["s"].as_i
+        def getHeartbeat
+            return {"op": Gateway::HEARTBEAT, "d": @seq}.to_json
+        end
+
+        def identify
+            token = ""
+            if @bot_token != ""
+                token = @bot_token
+            else
+                token = @token
             end
-            
+            payload = { "op": Gateway::IDENTIFY, 
+                        "d": {
+                        "token": token, 
+                        "properties": {
+                            "$os": "null", 
+                            "$browser": "discord-cr",
+                            "$device": "discord-cr",
+                            "$referrer": "",
+                            "$referring_domain": ""},
+                            "compress": true,
+                            "large_threshold": 250,
+                            "v": 1}
+                        }.to_json
+            return self.sendAsJson(payload)
+        end
 
-            if op == RECONNECT
-                logWarning("Got reconnect event; doing nothing. Reconnecting isn't implemented yet.")
-                return
+        def resume
+            token = ""
+            if @bot_token != ""
+                token = @bot_token
+            else
+                token = @token
             end
+            payload = {"op": Gateway::RESUME, "d": { "seq": @seq, "session_id": @session_id, "token": token}}.to_json
+            return self.sendAsJson(payload)
+        end
 
-            if op == HEARTBEAT_ACK
-                return
-            end
+        def setupHeartbeats(hello : Gateway::Hello)
+            logInfo("Stayin' alive...'")
+            stop = false
+            interval = hello.interval
 
-            if op == HEARTBEAT
-                beat = self.getHeartbeat()
-                return self.sendAsJson(beat)
-            end
-
-            if op == HELLO
-                hello = Hello.from_json(js.to_s)
-                setupHeartbeats(hello)
-            end
-            
-
-            if op == INVALIDATE_SESSION
-                @seq = 0
-                @session_id = ""
-                if d == true
-                    @ws.as(HTTP::WebSocket).close
-                    self.resume
+            spawn do
+                loop do
+                    self.sendAsJson(getHeartbeat)
+                    sleep hello.interval.millisecond
                 end
-                return self.identify
+            end
+        end
+
+        def handleSocketMessage(msg : String)
+            begin
+                js = JSON.parse(msg)
+
+                op = js["op"].as_i
+                d = js["d"]
+                
+                if js["s"].as_i?.not_nil!
+                    @seq = js["s"].as_i
+                end
+                
+                logInfo("Got op code '#{op.to_s}'")
+
+                if op == Gateway::HELLO
+                    hello = Gateway::Hello.from_json(js.to_s)
+                    setupHeartbeats(hello)
+                end
+                
+                if op == Gateway::RECONNECT
+                    logWarning("Got reconnect event; doing nothing. Reconnecting isn't implemented yet.")
+                    return
+                end
+
+                if op == Gateway::HEARTBEAT_ACK
+                    return
+                end
+
+                if op == Gateway::HEARTBEAT
+                    beat = self.getHeartbeat()
+                    self.sendAsJson(beat)
+                    return
+                end
+
+                if op == Gateway::INVALIDATE_SESSION
+                    @seq = 0
+                    @session_id = ""
+                    if d == true
+                        @ws.as(HTTP::WebSocket).close
+                        self.resume
+                    end
+                    self.identify
+                    return
+                end
+
+                if op == Gateway::DISPATCH
+                    event = js["t"]
+                    handleDispatch(event.as_s, d)
+                end
+            rescue ex
+                logFatal(ex.message.as(String))            
+            end
+            return
+        end
+
+        def wsFromClient(resume : Bool)
+            @ws = HTTP::WebSocket.new(getGateway.url)
+            @ws.as(HTTP::WebSocket).on_message(&->on_message(String))
+            @ws.as(HTTP::WebSocket).on_close(&->on_close(String))
+            logInfo("Created a new websocket")
+
+            if !resume
+                self.identify
+                logInfo("Sent the identify payload to create websocket connection") 
+            end
+        end
+
+
+        def token
+            return @token
+        end
+
+        def bot_token
+            return @bot_token
+        end
+
+        def request(method : String, url : String, args : HTTP::Headers)
+            headers = HTTP::Headers{"User-Agent" => @user_agent}
+
+            
+            if @bot_token != ""
+                logInfo("bot token: #{@bot_token}")            
+                headers["Authorization"] = @bot_token
+                headers["Content-Type"] = "application/json"
+            elsif token != ""
+                headers["Authorization"] = @token
+            end
+                
+            
+
+            if args.has_key?("json")
+                headers["Content-Type"] = "application/json"
+            end    
+                
+            res = nil
+            if args.has_key?("json")
+                logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}, Body: #{args["json"]}")
+                res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: args["json"])
+            else
+                logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}")
+                res = HTTP::Client.exec(method, URI.parse(url), headers)
+            end            
+            data = jsonOrText(res)        
+            if 300 > res.status_code >= 200
+                logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
+                return data
             end
 
-            if op == DISPATCH
-                event = js["t"]
-                handleDispatch(event, d)
+            if res.status_code == 429
+                dat = data.as(JSON::Any)
+                d = dat["retry_after"].to_s
+                i = d.to_i
+                i = i / 1000
+                fmt = "We are being rate limited. Retrying in #{i.to_s} seconds."
+
+                spawn do
+                    sleep Time.new(i.as(Int32)).second
+                end
             end
-        rescue ex
-            logFatal(ex.message.as(String))            
-        end
-    end
 
-    def wsFromClient(client : DSClient, resume : Bool)
-        if @token == ""
-            token = @bot_token
-        else
-            token = client.token
-        end
+            if res.status_code == 502
+                logWarning("Gateway unavailable")
+            end
 
-        ws = HTTP::WebSocket.new(getGateway.url)
-        logInfo("Created a new websocket")
-
-        if !resume
-            yield self.identify
-            logInfo("Sent the identify payload to create websocket connection")
-            return ws
-        end
-    end
-
-
-    def token
-        return @token
-    end
-
-    def bot_token
-        return @bot_token
-    end
-
-    def request(method : String, url : String, args : HTTP::Headers)
-        headers = HTTP::Headers{"User-Agent" => @user_agent}
-
-        
-        if @bot_token != ""
-            logInfo("bot token: #{@bot_token}")            
-            headers["Authorization"] = @bot_token
-            headers["Content-Type"] = "application/json"
-        elsif token != ""
-            headers["Authorization"] = @token
-        end
+            if res.status_code == 403
+                logWarning("Access forbidden #{data}")
+            elsif res.status_code == 404
+                logWarning("Page not found #{data}")
+            elsif res.status_code == 401
+                logWarning("Unauthorized #{data}")
+            else
+                logWarning("Unknown HTTP error #{data}")
+            end
             
-        
+        end
 
-        if args.has_key?("json")
-            headers["Content-Type"] = "application/json"
-        end    
-            
-        res = nil
-        if args.has_key?("json")
-            logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}, Body: #{args["json"]}")
-            res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: args["json"])
-        else
-            logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}")
-            res = HTTP::Client.exec(method, URI.parse(url), headers)
-        end            
-        data = jsonOrText(res)        
-        if 300 > res.status_code >= 200
-            logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
+        def get(url : String, headers : HTTP::Headers)
+            return self.request("GET", url, headers)
+        end
+
+        def put(url : String, headers : HTTP::Headers)
+            return self.request("PUT", url, headers)
+        end
+
+        def patch(url : String, headers : HTTP::Headers)
+            return self.request("PATCH", url, headers)
+        end
+
+        def delete(url : String, headers : HTTP::Headers)
+            return self.request("DELETE", url, headers)
+        end
+
+        def post(url : String, headers : HTTP::Headers)
+            return self.request("POST", url, headers)
+        end
+
+        def close
+            self.session.close
+        end
+
+        def _token(token : String, bot : String)
+            @token = token
+            @bot_token = bot
+        end
+
+        def emailLogin(email : String, password : String)
+            payload = HTTP::Headers.new
+            payload["json"] = {"email": email, "password": password}.to_json
+            data = self.post(LOGIN, payload).as(JSON::Any)        
+            self._token(data["token"].as_s, "")
+        end
+
+        def botLogin()
+            data = self.post(LOGIN, HTTP::Headers.new).as(JSON::Any)
+            self._token("", data["token"].as_s)
+        end
+
+        def staticLogin(token : String, bot : String)
+            old_token = @token
+            old_bot = @bot_token
+            self._token(token, bot)
+
+            data = self.get(ME, nil).as(JSON::Any)
             return data
         end
 
-        if res.status_code == 429
-            dat = data.as(JSON::Any)
-            d = dat["retry_after"].to_s
-            i = d.to_i
-            i = i / 1000
-            fmt = "We are being rate limited. Retrying in #{i.to_s} seconds."
+        def logout
+            return self.post(LOGOUT, nil)
+        end
 
-            spawn do
-                sleep Time.new(i.as(Int32)).second
+        def privateMessage(user : User)
+            payload = HTTP::Headers.new
+            payload["json"] = {"recipient_id": user.id}.to_json
+            return self.post(ME+"/channels", payload)
+        end
+
+        def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
+            url = "#{CHANNELS}/#{channel}/messages"
+            r = Random.new                
+            payload = HTTP::Headers.new
+            payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
+            return self.post(url, payload)
+        end
+
+        def sendTyping(channel_id : String)
+            url = "#{CHANNELS}/#{channel_id}/typing"
+            return self.post(url, nil)
+        end
+
+        def on_message(msg : String)
+            begin
+                handleSocketMessage(msg)
+            rescue ex
+                logFatal(ex.message.as(String))
             end
-        end
-
-        if res.status_code == 502
-            logWarning("Gateway unavailable")
-        end
-
-        if res.status_code == 403
-            logWarning("Access forbidden #{data}")
-        elsif res.status_code == 404
-            logWarning("Page not found #{data}")
-        elsif res.status_code == 401
-            logWarning("Unauthorized #{data}")
-        else
-            logWarning("Unknown HTTP error #{data}")
+            
         end
         
-    end
-
-    def get(url : String, headers : HTTP::Headers)
-        return self.request("GET", url, headers)
-    end
-
-    def put(url : String, headers : HTTP::Headers)
-        return self.request("PUT", url, headers)
-    end
-
-    def patch(url : String, headers : HTTP::Headers)
-        return self.request("PATCH", url, headers)
-    end
-
-    def delete(url : String, headers : HTTP::Headers)
-        return self.request("DELETE", url, headers)
-    end
-
-    def post(url : String, headers : HTTP::Headers)
-        return self.request("POST", url, headers)
-    end
-
-    def close
-        self.session.close
-    end
-
-    def _token(token : String, bot : String)
-        @token = token
-        @bot_token = bot
-    end
-
-    def emailLogin(email : String, password : String)
-        payload = HTTP::Headers.new
-        payload["json"] = {"email": email, "password": password}.to_json
-        data = self.post(LOGIN, payload).as(JSON::Any)        
-        self._token(data["token"].as_s, "")
-    end
-
-    def botLogin()
-        data = self.post(LOGIN, HTTP::Headers.new).as(JSON::Any)
-        self._token("", data["token"].as_s)
-    end
-
-    def staticLogin(token : String, bot : String)
-        old_token = @token
-        old_bot = @bot_token
-        self._token(token, bot)
-
-        data = self.get(ME, nil).as(JSON::Any)
-        return data
-    end
-
-    def logout
-        return self.post(LOGOUT, nil)
-    end
-
-    def privateMessage(user : User)
-        payload = HTTP::Headers.new
-        payload["json"] = {"recipient_id": user.id}.to_json
-        return self.post(ME+"/channels", payload)
-    end
-
-    def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
-        url = "#{CHANNELS}/#{channel}/messages"
-        r = Random.new                
-        payload = HTTP::Headers.new
-        payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
-        return self.post(url, payload)
-    end
-
-    def sendTyping(channel_id : String)
-        url = "#{CHANNELS}/#{channel_id}/typing"
-        return self.post(url, nil)
-    end
-
-    def on_message(msg : String)
-        begin
-            @cg.handleSocketMessage(msg)
-        rescue ex
-            logFatal(ex.message.as(String))
+        def on_close(msg : String)
+            logWarning("Connection closed: #{msg}")
         end
-        
-    end
-    
-    def on_close(msg : String)
-        logWarning("Connectino lcose: #{msg}")
-    end
 
-    def run(ws : HTTP::WebSocket)
-        loop do
-            begin
-                ws.run    
-            rescue ex
-                logFatal(ex.message.to_s)
+        def waitToReconnect
+            logWarning("Sleeping for #{@hold_up.to_s} seconds before trying to reconnect")
+
+            sleep @hold_up.seconds
+
+            @hold_up = 1.0 if @hold_up < 1.0
+            @hold_up *= 1.5 if @hold_up < 120.0
+            @hold_up = 115.0 + (90.0 - @hold_up) if @hold_up > 120.0
+        end
+
+        def run
+            loop do
+                begin
+                    @ws.as(HTTP::WebSocket).run
+                rescue ex
+                    logFatal(ex.message.to_s)
+                end
+                waitToReconnect
+
+                wsFromClient(false)
             end
         end
-    end
 
-    def handleDispatch(event : String, payload)
-        if event == "READY"
-            @seq = js["s"].as_i
-            @session_id = js["session_id"].as_s
-        end 
-                
-        if event == "MESSAGE_CREATE"
-            payload = Message.from_json(d.to_json)
-            call_event message_create, payload
-        end
+        def handleDispatch(event : String, data : JSON::Any)
+            if event == "READY"
+                payload = Gateway::Ready.from_json(data.to_json)
+                call_event ready, payload
+            end
 
-    end
+            if event == "RESUMED"
+                payload = Gateway::Resume.from_json(data.to_json)
+                call_event resume, payload
+            end
+                    
+            if event == "STATUS_UPDATE"
+                payload = Gateway::StatusUpdate.from_json(data.to_json)
+                call_event status_update, payload
+            end
 
-    def connect        
-        ws = @cg.wsFromClient(self, false) do |something|
-            puts something
-        end
-        ws.as(HTTP::WebSocket).on_message(&->on_message(String))
-        ws.as(HTTP::WebSocket).on_close(&->on_close(String))
-        self.run(ws.as(HTTP::WebSocket))
-    end
+            if event == "VOICE_STATE_UPDATE"
+                payload = Voice::VoiceStateUpdate.from_json(data.to_json)
+                call_event voice_state_update, payload
+            end
 
-    macro event(name, payload)
-        def on_{{name}}(&handler : {{payload}} -> )
-            (@on_{{name}}_handlers ||= [] of {{payload}} -> ) << handler
-        end
-    end
+            if event == "CHANNEL_CREATE"
+                payload = (Channels::DMChannel.from_json(data.to_json) || Channels::GuildChannel.from_json(data.to_json))
+                call_event channel_create, payload
+            end
 
-    macro call_event(name, payload)
-        @on_{{name}}_handlers.try &.each do |handler|
-            begin
-                handler.call({{payload}})
-            rescue ex
-                logFatal(ex.message.to_s)
+            if event == "CHANNEL_UPDATE"
+                payload = Channels::GuildChannel.from_json(data.to_json)
+                call_event channel_update, payload
+            end
+
+            if event == "MESSAGE_CREATE"
+                payload = Channels::Message.from_json(data.to_json)
+                call_event message_create, payload
+            end
+
+            if event == "GUILD_CREATE"
+                payload = Guilds::Guild.from_json(data.to_json)
+                call_event guild_create, payload
+            end
+
+            if event == "GUILD_UPDATE"
+                payload = Guilds::Guild.from_json(data.to_json)
+                call_event guild_update, payload
+            end
+
+            if event == "GUILD_DELETE"
+                payload = Guilds::Guild.from_json(data.to_json)
+                call_event guild_delete, payload
+            end
+
+            if event == "GUILD_BAN_ADD"
+                payload = User.from_json(data.to_json)
+                call_event guild_ban_add, payload
+            end
+
+            if event == "GUILD_BAN_REMOVE"
+                payload = User.from_json(data.to_json)
+                call_event guild_ban_remove, payload
+            end
+
+            if event == "GUILD_EMOJIS_UPDATE"
+                payload = Guilds::EmojisUpdate.from_json(data.to_json)
+                call_event guild_emojis_update, payload
             end
         end
-    end
 
-    event message_create, Message
+        def connect        
+            wsFromClient(false)
+            
+            self.run
+        end
+
+        macro event(name, payload)
+            def on_{{name}}(&handler : {{payload}} -> )
+                (@on_{{name}}_handlers ||= [] of {{payload}} -> ) << handler
+            end
+        end
+
+        macro call_event(name, payload)
+            @on_{{name}}_handlers.try &.each do |handler|
+                begin
+                    handler.call({{payload}})
+                rescue ex
+                    logFatal(ex.message.to_s)
+                end
+            end
+        end
+
+        event message_create, Channels::Message
+        event ready, Gateway::Ready
+        event resume, Gateway::Resume
+        event status_update, Gateway::StatusUpdate
+        event voice_state_update, Voice::VoiceStateUpdate
+        event channel_create, (Channels::DMChannel | Channels::GuildChannel)
+        event channel_update, Channels::GuildChannel
+        event guild_create, Guilds::Guild
+        event guild_update, Guilds::Guild
+        event guild_delete, Guilds::Guild
+        event guild_ban_add, User
+        event guild_ban_remove, User
+        event guild_emojis_update, Guilds::EmojisUpdate
+
+    end
 end

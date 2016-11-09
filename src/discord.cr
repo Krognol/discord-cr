@@ -47,7 +47,7 @@ module Discord
         end
         
         def getGateway
-            response = HTTP::Client.get(Endpoints::Gateway)
+            response = HTTP::Client.get(EndpointGateway)
             return Gateway::Gateway.from_json(response.body)
         end
 
@@ -120,24 +120,14 @@ module Discord
                 case op
                     when Gateway::HELLO
                         hello = Gateway::Hello.from_json(d.to_json)
-                    setupHeartbeats(hello)
-                    end
-
+                        setupHeartbeats(hello)
                     when Gateway::RECONNECT
                         wsFromClient(false)
+                    when Gateway::HEARTBEAT_ACK
                         return
-                    end
-
-                    when Gateway::HERATBEAT_ACK
-                        return
-                    end
-
                     when Gateway::HEARTBEAT
                         beat = self.getHeartbeat()
                         self.sendAsJson(beat)
-                        return
-                    end
-
                     when Gateway::INVALIDATE_SESSION
                         @seq = 0
                         @session_id = ""
@@ -146,17 +136,14 @@ module Discord
                             self.resume
                         end
                         self.identify
-                        return
-                    end
-
                     when Gateway::DISPATCH
                         event = js["t"]
                         handleDispatch(event.as_s, d)
-                    end
                 end
             rescue ex
                 logFatal("Error while handling socket message: #{ex.message.to_s}\r\nPayload: #{d.to_json}")            
             end
+            return
         end
 
         def wsFromClient(resume : Bool)
@@ -178,7 +165,7 @@ module Discord
             if @bot_token != ""
                 logInfo("bot token: #{@bot_token}")            
                 headers["Authorization"] = @bot_token
-            elsif token != ""
+            elsif @token != ""
                 headers["Authorization"] = @token
             end
 
@@ -257,17 +244,17 @@ module Discord
         def emailLogin(email : String, password : String)
             payload = HTTP::Headers.new
             payload["json"] = {"email": email, "password": password}.to_json
-            data = self.post(Endpoints::Login, payload).as(JSON::Any)        
+            data = self.post(EndpointLogin, payload).as(JSON::Any)        
             self._token(data["token"].as_s, "")
         end
 
         def botLogin
-            data = self.post(Endpoints::Login, HTTP::Headers.new).as(JSON::Any)
+            data = self.post(EndpointLogin, HTTP::Headers.new).as(JSON::Any)
             self._token("", data["token"].as_s)
         end
         
         def logout
-            return self.post(Endpoints::Logout, nil)
+            return self.post(EndpointLogout, nil)
         end
 
         def on_message(msg : String)
@@ -311,142 +298,87 @@ module Discord
                 when "READY"
                     payload = Gateway::Ready.from_json(data.to_json)
                     call_event ready, payload
-                end
-
                 when "RESUMED"
                     payload = Gateway::Resume.from_json(data.to_json)
                     call_event resume, payload
-                end
-
                 when "STATUS_UPDATE"
                     payload = Gateway::StatusUpdate.from_json(data.to_json)
                     call_event status_update, payload
-                end
-
                 when "CHANNEL_CREATE"
                     payload = (Channels::DMChannel.from_json(data.to_json) || Channels::GuildChannel.from_json(data.to_json))
                     call_event channel_create, payload
-                end
-
                 when "CHANNEL_UPDATE"
                     payload = Channels::GuildChannel.from_json(data.to_json)
                     call_event channel_update, payload
-                end
-
                 when "GUILD_CREATE"
                     payload = Guilds::Guild.from_json(data.to_json)
                     call_event guild_create, payload
-                end
-
                 when "GUILD_UPDATE"
                     payload = Guilds::Guild.from_json(data.to_json)
                     call_event guild_update, payload
-                end 
-
                 when "GUILD_DELETE"
                     payload = Guilds::Guild.from_json(data.to_json)
                     call_event guild_delete, payload
-                end
-
                 when "GUILD_BAN_ADD"
                     payload = Users::User.from_json(data.to_json)
                     call_event guild_ban_add, payload
-                end
-
                 when "GUILD_BAN_REMOVE"
                     payload = Users::User.from_json(data.to_json)
                     call_event guild_ban_remove, payload
-                end
-
                 when "GUILD_EMOJIS_UPDATE"
                     payload = Guilds::EmojisUpdate.from_json(data.to_json)
                     call_event guild_emojis_update, payload
-                end
-
                 when "GUILD_INTEGRATIONS_UPDATE"
                     payload = Guilds::IntegrationsUpdate.from_json(data.to_json)
                     call_event guild_integrations_update, payload 
-                end
-
                 when "GUILD_MEMBER_ADD"
                     payload = Guilds::GuildMember.from_json(data.to_json)
                     call_event guild_member_add, payload
-                end
-
                 when "GUILD_MEMBER_REMOVE"
                     payload = Guilds::MemberRemove.from_json(data.to_json)
                     call_event guild_member_remove, payload
-                end
-
                 when "GUILD_MEMBER_UPDATE"
                     payload = Guilds::MemberUpdate.from_json(data.to_json)
                     call_event guild_member_update, payload
-                end
-
                 when "GUILD_MEMBERS_CHUNK"
                     payload = Guilds::MembersChunk.from_json(data.to_json)
                     call_event guild_members_chunk, payload
-                end
-
                 when "GUILD_ROLE_CREATE"
                     payload = Guilds::RoleCreate.from_json(data.to_json)
                     call_event guild_role_create, payload
-                end
-
                 when "GUILD_ROLE_UPDATE"
                     payload = Guilds::RoleUpdate.from_json(data.to_json)
                     call_event guild_role_update, payload
-                end
-
                 when "GUILD_ROLE_DELETE"
                     payload = Guilds::RoleDelete.from_json(data.to_json)
                     call_event guild_role_delete, payload
-                end
-
                 when "MESSAGE_CREATE"
                     payload = Channels::Message.from_json(data.to_json)
                     call_event message_create, payload
-                end
-
                 when "MESSAGE_UPDATE"
                     payload = Channels::Message.from_json(data.to_json)
                     call_event message_update, payload
-                end
-
                 when "MESSAGE_DELETE"
                     payload = Channels::MessageDelete.from_json(data.to_json)
                     call_event message_delete, payload
-                end
-
                 when "MESSAGE_DELETE_BULK"
                     payload = Channels::MessageDeleteBulk.from_json(data.to_json)
                     call_event message_delete_bulk, payload
-                end
-
                 when "PRESENCE_UPDATE"
                     payload = Users::PresenceUpdate.from_json(data.to_json)
                     call_event presence_update, payload
-                end
-
                 when "TYPING_START"
                     payload = Users::TypingStart.from_json(data.to_json)
                     call_event typing_start, payload
-                end
-
                 when "USER_SETTINGS_UPDATE"
                     # Something is supposed to happen here
                     # the user settings object isn't documented, skipping
-                end
-
                 when "VOICE_STATE_UPDATE"
                     payload = Voice::StateUpdate.from_json(data.to_json)
                     call_event voice_state_update, payload
-                end
-
                 when "VOICE_SERVER_UPDATE"
                     payload = Voice::ServerUpdate.from_json(data.to_json)
                     call_event voice_server_update, payload
-                end
             end
         end
 
@@ -458,11 +390,11 @@ module Discord
         def sendPrivateMessage(user : Users::User)
             payload = HTTP::Headers.new
             payload["json"] = {"recipient_id": user.id}.to_json
-            return self.post(Endponits::Me+"/channels", payload)
+            return self.post(EndpointMe + "/channels", payload)
         end
 
         def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
-            url = Endpoints::ChannelMessages(channel)
+            url = channelMessages(channel)
             r = Random.new                
             payload = HTTP::Headers.new
             payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
@@ -470,7 +402,7 @@ module Discord
         end
 
         def sendTyping(channel_id : String)
-            url = Endpoints::ChannelTyping(channel_id)
+            url = channelTyping(channel_id)
             return self.post(url, nil)
         end
 

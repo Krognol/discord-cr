@@ -1,240 +1,237 @@
 # All known endpoints
 
-module Endpoints
-    Status     = "https://status.discordapp.com/api/v6/"
-	Sm         = Status + "scheduled-maintenances/"
-	SmActive   = Sm + "active.json"
-	SmUpcoming = Sm + "upcoming.json"
 
-	Discord  = "https://discordapp.com/"
-	API      = Discord + "api/v6/"
-	Guilds   = API + "guilds/"
-	Channels = API + "channels/"
-	Users    = API + "users/"
-	Gateway  = API + "gateway"
+        EndpointStatus  = "https://status.discordapp.com/api/v6/"
+        EndpointSm = EndpointStatus + "scheduled-maintenances/"
+        EndpointSmActive = EndpointSm + "active.json"
+        EndpointSmUpcoming = EndpointSm + "upcoming.json"
 
-	Auth           = API + "auth/"
-	Login          = Auth + "login"
-	Logout         = Auth + "logout"
-	Verify         = Auth + "verify"
-	VerifyResend   = Auth + "verify/resend"
-	ForgotPassword = Auth + "forgot"
-	ResetPassword  = Auth + "reset"
-	Register       = Auth + "register"
+        EndpointDiscord = "https://discordapp.com/"
+        EndpointAPI = EndpointDiscord + "api/v6/"
+        EndpointGuilds = EndpointAPI + "guilds/"
+        EndpointChannels = EndpointAPI + "channels/"
+        EndpointUsers = EndpointAPI + "users/"
+        EndpointGateway = EndpointAPI + "gateway"
 
-	Voice        = API + "/voice/"
-	VoiceRegions = Voice + "regions"
-	VoiceIce     = Voice + "ice"
+        EndpointMe = EndpointUsers + "/@me"
+        EndpointAuth = EndpointAPI + "auth/"
+        EndpointLogin = EndpointAuth + "login"
+        EndpointLogout = EndpointAuth + "logout"
+        EndpointVerify = EndpointAuth + "verify"
+        EndpointVerifyResend = EndpointAuth + "verify/resend"
+        EndpointForgotPassword = EndpointAuth + "forgot"
+        EndpointResetPassword = EndpointAuth + "reset"
+        EndpointRegister = EndpointAuth + "register"
 
-	Tutorial           = API + "tutorial/"
-	TutorialIndicators = Tutorial + "indicators"
+        EndpointVoice = EndpointAPI + "/voice/"
+        EndpointVoiceRegions = EndpointVoice + "regions"
+        EndpointVoiceIce = EndpointVoice + "ice"
 
-	Track        = API + "track"
-	Sso          = API + "sso"
-	Report       = API + "report"
-	Integrations = API + "integrations"
+        EndpointTutorial = EndpointAPI + "tutorial/"
+        EndpointTutorialIndicators = EndpointTutorial + "indicators"
+
+        EndpointTrack = EndpointAPI + "track"
+        EndpointSso = EndpointAPI + "sso"
+        EndpointReport = EndpointAPI + "report"
+        EndpointIntegrations = EndpointAPI + "integrations"
 
 
-# +---------------------+
-# |                     |
-# |    User Endpoints   |
-# |                     |
-# +---------------------+
+    # +---------------------+
+    # |                     |
+    # |    User Endpoints   |
+    # |                     |
+    # +---------------------+
 
-    def User(uid : String)
-        return Users + uid
-    end
+        def user(uid : String)
+            return EndpointUsers + uid
+        end
 
-    def Me
-        return Users + "/@me"
-    end
+        def userAvatar(uid, aid : String)
+            return EndpointUsers + uid + "/avatars/" + aid + ".jpg"
+        end
 
-    def UserAvatar(uid, aid : String)
-        return Users + uid + "/avatars/" + aid + ".jpg"
-    end
+        def userSettings(uid : String)
+            return EndpointUsers + uid + "/settings"
+        end
 
-    def UserSettings(uid : String)
-        return Users + uid + "/settings"
-    end
+        def userGuilds(uid : String)
+            return EndpointUsers + uid + "/guilds"
+        end
 
-    def UserGuilds(uid : String)
-        return Users + uid + "/guilds"
-    end
+        def userGuild(uid, gid : String)
+            return EndpointUsers + uid + "/guilds/" + gid
+        end
 
-    def UserGuild(uid, gid : String)
-        return Users + uid + "/guilds/" + gid
-    end
+        def userGuildSettings(uid, gid : String)
+            return EndpointUsers + uid + "/guilds/" + gid + "/settings"
+        end
 
-    def UserGuildSettings(uid, gid : String)
-        return Users + uid + "/guilds/" + gid + "/settings"
-    end
+        def userChannels(uid : String)
+            return EndpointUsers + uid + "/channels"
+        end
 
-    def UserChannels(uid : String)
-        return Users + uid + "/channels"
-    end
+        def userDevices(uid : String)
+            return EndpointUsers + uid + "/devices"
+        end
 
-    def UserDevices(uid : String)
-        return Users + uid + "/devices"
-    end
+        def userConnections(uid : String)
+            return EndpointUsers + uid + "/connections"
+        end
 
-    def UserConnections(uid : String)
-        return Usres + uid + "/connections"
-    end
+    # +---------------------+
+    # |                     |
+    # |   Guild Endpoints   |
+    # |                     |
+    # +---------------------+
 
-# +---------------------+
-# |                     |
-# |   Guild Endpoints   |
-# |                     |
-# +---------------------+
+        def guild(gid : String)
+            return EndpointGuilds + gid
+        end
 
-    def Guild(gid : String)
-        return Guilds + gid
-    end
+        def guildInvites(gid : String)
+            return EndpointGuilds + gid + "/invites"
+        end
 
-    def GuildInvites(gid : String)
-        return Guilds + gid + "/invites"
-    end
+        def guildChannels(gid : String)
+            return EndpointGuilds + gid + "/channels"
+        end
 
-    def GuildChannels(gid: String)
-        return Guilds + gid + "/channels"
-    end
+        def guildMembers(gid : String)
+            return EndpointGuilds + gid + "/members"
+        end
 
-    def GuildMembers(gid: String)
-        return Guilds + gid + "/members"
-    end
+        def guildMember(gid, uid : String)
+            return EndpointGuilds + gid + "/members/" + uid
+        end
 
-    def GuildMember(gid, uid : String)
-        return Guilds + gid + "/members/" + uid
-    end
+        def guildBans(gid : String)
+            return EndpointGuilds + gdi + "/bans"
+        end
 
-    def GuildBans(gid : String)
-        return Guilds + gdi + "/bans"
-    end
+        def guildBan(gid, uid : String)
+            return EndpointGuilds + gid + "/bans/" + uid
+        end
 
-    def GuildBan(gid, uid: String)
-        return Guilds + gid + "/bans/" + uid
-    end
+        def guildIntegrations(gid : String)
+            return EndpointGuilds + gid + "/integrations"
+        end
 
-    def GuildIntegrations(gid : String)
-        return Guilds + gid + "/integrations"
-    end
+        def guidIntegration(gid, iid : String)
+            return EndpointGuilds + gid + "/integrations/" + iid
+        end
 
-    def GuidIntegration(gid, iid : String)
-        return Guilds + gid + "/integrations/" + iid
-    end
+        def guildIntegrationSync(gid, iid : String)
+            return EndpointGuilds + gid + "/integrations/" + iid + "/sync"
+        end
 
-    def GuildIntegrationSync(gid, iid : String)
-        return Guilds + gid + "/integrations/" + iid + "/sync"
-    end
+        def guildRoles(gid : String)
+            return EndpointGuilds + gid + "/roles"
+        end
 
-    def GuildRoles(gid : String)
-        return Guilds + gid + "/roles"
-    end
+        def guildRole(gid, rid : String)
+            return EndpointGuilds + gid + "/roles/" + rid
+        end
 
-    def GuildRole(gid, rid : String)
-        return Guilds + gid + "/roles/" + rid
-    end
+        def guildInvites(gid : String)
+            return EndpointGuilds + gid + "/invites"
+        end
 
-    def GuildInvites(gid : String)
-        return Guilds + gid + "/invites"
-    end
+        def guildEmbed(gid : String)
+            return EndpointGuilds + gid + "/embed"
+        end
 
-    def GuildEmbed(gid : String)
-        return Guilds + gid + "/embed"
-    end
+        def guildPrune(gid : String)
+            return EndpointGuilds + gid + "/prune"
+        end
 
-    def GuildPrune(gid : String)
-        return Guilds + gid + "/prune"
-    end
+        def guildIcon(gid, has : String)
+            return EndpointGuilds + gid + "/icons/" + hash + ".jpg"
+        end
 
-    def GuildIcon(gid, has : String)
-        return Guilds + gid + "/icons/" + hash + ".jpg"
-    end
+        def guildSplash(gid, hash : String)
+            return EndpointGuilds + gid + "/splashes/" + hash + ".jpg"
+        end
 
-    def GuildSplash(gid, hash : String)
-        return Guilds + gid + "/splashes/" + hash + ".jpg"
-    end
+    # +---------------------+
+    # |                     |
+    # |  Channel Endpoints  |
+    # |                     |
+    # +---------------------+
 
-# +---------------------+
-# |                     |
-# |  Channel Endpoints  |
-# |                     |
-# +---------------------+
+        def channel(cid : String)
+            return EndpointChannels + cid
+        end
 
-    def Channel(cid : String)
-        return Channels + cid
-    end
+        def channelPermissions(cid : String)
+            return EndpointChannels + cid + "/permissions"
+        end
 
-    def ChannelPermissions(cid : String)
-        return Channels + cid + "/permissions"
-    end
+        def channelPremission(cid, pid : String)
+            return EndpointChannels + cid + "/permissions/" + pid
+        end
 
-    def ChannelPremission(cid, pid : String)
-        return Channels + cid + "/permissions/" + pid
-    end
+        def channelInvites(cid : String)
+            return EndpointChannels + cid + "/invites"
+        end
 
-    def ChannelInvites(cid : String)
-        return Chanenls + cid + "/invites"
-    end
+        def channelTyping(cid : String)
+            return EndpointChannels + cid + "/typing"
+        end
 
-    def ChannelTyping(cid : String)
-        return Channels + cid + "/typing"
-    end
+        def channelMessages(cid : String)
+            return EndpointChannels + cid+ "/messages" 
+        end
 
-    def ChannelMessages(cid: String)
-        return Channels + cid+ "/messages" 
-    end
+        def channelMessaeg(cid, mid : String)
+            return EndpointChannels + cid + "/messages/" + mid
+        end
 
-    def ChannelMessaeg(cid, mid : String)
-        return Channel + cid + cid + "/messages/" + mid
-    end
+        def channelMessageAck(cid, mid : String)
+            return EndpointChannels + cid + "/messages/" + mdi + "/ack"
+        end
 
-    def ChannelMessageAck(cid, mid : String)
-        return Channel + cid + "/messages/" + mdi + "/ack"
-    end
+        def channelMessagesBulkDelete(cid : String)
+            return channel(cid) + "/messages/bulk_delete"
+        end
 
-    def ChannelMessagesBulkDelete(cid : String)
-        return EndpointChannel(cID) + "/messages/bulk_delete"
-    end
+        def channelMessagesPins(cid : String)
+            return channel(cID) + "/pins"
+        end
 
-    def ChannelMessagesPins(cid : String)
-        return EndpointChannel(cID) + "/pins"
-    end
+        def channelMessagePin(cid, mid : String)
+            return channel(cid) + "/pins/" + mid
+        end
 
-    def ChannelMessagePin(cid, mid : String)
-        return EndpointChannel(cid) + "/pins/" + mid
-    end
+    # +---------------------+
+    # |                     |
+    # |   Other Endpoints   |
+    # |                     |
+    # +---------------------+
 
-# +---------------------+
-# |                     |
-# |   Other Endpoints   |
-# |                     |
-# +---------------------+
+        def invite(iid : String)
+            return EndpointAPI + "invite/" + iid
+        end
 
-    def Invite(iid : String)
-        return API + "invite/" + iid
-    end
+        def integrationsJoin(iid : String)
+            return EndpointAPI + "integrations/" + iid + "/join"
+        end
 
-    def IntegrationsJoin(iid : String)
-        return API + "integrations/" + iid + "/join"
-    end
+        def emoji(eid : String)
+            return EndpointAPI + "emojis/" + eid + ".png"
+        end
 
-    def Emoji(eid : String)
-        return API + "emojis/" + eid + ".png"
-    end
+        def oauth2
+            return EndpointAPI + "oauth2/"
+        end
 
-    def Oauth2
-        return API + "oauth2/"
-    end
+        def applications
+            return EndpointOauth2 + "applications"
+        end
 
-    def Applications
-        return Oauth2 + "applications"
-    end
+        def application(aid : String)
+            return EndpointApplication + "/" + aid
+        end
 
-    def Application(aid : String)
-        return Application + "/" + aid
-    end
-
-    def ApplicationsBot(aid : String)
-        return Applications + "/" + aid + "/bot"
-end
+        def applicationsBot(aid : String)
+            return EndpointApplications + "/" + aid + "/bot"
+        end

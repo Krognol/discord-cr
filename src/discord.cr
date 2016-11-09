@@ -40,8 +40,7 @@ APPLICATIONS = API_BASE + "/oauth2/applications"
 
 
 
-def jsonOrText(res : HTTP::Client::Response)
-    logInfo("Content-type: #{res.headers["content-type"]}")
+def jsonOrText(res : HTTP::Client::Response)    
     if res.headers["content-type"] == "application/json"
         js = JSON.parse(res.body.to_s)
         logInfo("Response: #{js}")

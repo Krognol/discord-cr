@@ -35,6 +35,7 @@ client.on_message_create do |message|
   puts message.content
 end
 
+client.connect
 # better documentation will come later 👌
 ```
 

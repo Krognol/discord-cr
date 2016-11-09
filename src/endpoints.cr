@@ -1,13 +1,13 @@
 # All known endpoints
 
 module Endpoints
-    Status     = "https://status.discordapp.com/api/v2/"
+    Status     = "https://status.discordapp.com/api/v6/"
 	Sm         = Status + "scheduled-maintenances/"
 	SmActive   = Sm + "active.json"
 	SmUpcoming = Sm + "upcoming.json"
 
 	Discord  = "https://discordapp.com/"
-	API      = Discord + "api/"
+	API      = Discord + "api/v6/"
 	Guilds   = API + "guilds/"
 	Channels = API + "channels/"
 	Users    = API + "users/"
@@ -43,6 +43,10 @@ module Endpoints
 
     def User(uid : String)
         return Users + uid
+    end
+
+    def Me
+        return Users + "/@me"
     end
 
     def UserAvatar(uid, aid : String)

@@ -1,6 +1,10 @@
 # discord-cr
 
-TODO: Work in progress, please don't use.
+A Discord fro Crystal!
+
+Still needs some refinement. What you see is not the final product.
+
+Still a WIP. Use at your own risk. Should at least be funcitonal now.
 
 ## Installation
 
@@ -19,10 +23,20 @@ dependencies:
 
 ```crystal
 require "discord-cr"
+
+# Note that the "Bot " part is very important
+client = Discord::Client.new("regular token", "Bot token")
+client.botLogin # Requires no arguments
+# alternatively you can use 
+# client.emailLogin("your email here", "your l33t p4ssword here")
+
+# register an event
+client.on_message_create do |message|
+  puts message.content
+end
+
+# better documentation will come later 👌
 ```
-
-
-TODO: Write usage instructions here
 
 ## Development
 

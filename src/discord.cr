@@ -26,23 +26,9 @@ def logRequest(text : String)
     puts "[REQUEST]".colorize(:light_blue).toggle(true).to_s + " :: " + text + "\r\n"
 end
 
-BASE = "https://discordapp.com"
-API_BASE = BASE + "/api/v6"
-GATEWAY = API_BASE + "/gateway"
-USERS = API_BASE + "/users"
-ME = USERS + "/@me"
-REGISTER = API_BASE + "/auth/register"
-LOGIN = API_BASE + "/auth/login"
-LOGOUT = API_BASE + "/auth/logout"
-GUILDS = API_BASE + "/guilds"
-CHANNELS = API_BASE + "/channels"
-APPLICATIONS = API_BASE + "/oauth2/applications"
-
-
-
 def jsonOrText(res : HTTP::Client::Response)    
     if res.headers["content-type"] == "application/json"
-        js = JSON.parse(res.body.to_s)
+        js = JSON.parse(res.body.to_json)
         logInfo("Response: #{js}")
         return js
     end
@@ -61,7 +47,7 @@ module Discord
         end
         
         def getGateway
-            response = HTTP::Client.get(GATEWAY)
+            response = HTTP::Client.get(Endpoints::Gateway)
             return Gateway::Gateway.from_json(response.body)
         end
 
@@ -185,19 +171,9 @@ module Discord
             end
         end
 
-
-        def token
-            return @token
-        end
-
-        def bot_token
-            return @bot_token
-        end
-
         def request(method : String, url : String, args : HTTP::Headers)
             headers = HTTP::Headers{"User-Agent" => @user_agent}
 
-            
             if @bot_token != ""
                 logInfo("bot token: #{@bot_token}")            
                 headers["Authorization"] = @bot_token
@@ -284,36 +260,17 @@ module Discord
         def emailLogin(email : String, password : String)
             payload = HTTP::Headers.new
             payload["json"] = {"email": email, "password": password}.to_json
-            data = self.post(LOGIN, payload).as(JSON::Any)        
+            data = self.post(Endpoints::Login, payload).as(JSON::Any)        
             self._token(data["token"].as_s, "")
         end
 
-        def botLogin()
-            data = self.post(LOGIN, HTTP::Headers.new).as(JSON::Any)
+        def botLogin
+            data = self.post(Endpoints::Login, HTTP::Headers.new).as(JSON::Any)
             self._token("", data["token"].as_s)
         end
         
         def logout
-            return self.post(LOGOUT, nil)
-        end
-
-        def privateMessage(user : Users::User)
-            payload = HTTP::Headers.new
-            payload["json"] = {"recipient_id": user.id}.to_json
-            return self.post(ME+"/channels", payload)
-        end
-
-        def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
-            url = "#{CHANNELS}/#{channel}/messages"
-            r = Random.new                
-            payload = HTTP::Headers.new
-            payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
-            return self.post(url, payload)
-        end
-
-        def sendTyping(channel_id : String)
-            url = "#{CHANNELS}/#{channel_id}/typing"
-            return self.post(url, nil)
+            return self.post(Endpoints::Logout, nil)
         end
 
         def on_message(msg : String)
@@ -496,8 +453,26 @@ module Discord
 
         def connect        
             wsFromClient(false)
-            
             self.run
+        end
+
+        def sendPrivateMessage(user : Users::User)
+            payload = HTTP::Headers.new
+            payload["json"] = {"recipient_id": user.id}.to_json
+            return self.post(Endponits::Me+"/channels", payload)
+        end
+
+        def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
+            url = Endpoints::ChannelMessages(channel)
+            r = Random.new                
+            payload = HTTP::Headers.new
+            payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
+            return self.post(url, payload)
+        end
+
+        def sendTyping(channel_id : String)
+            url = Endpoints::ChannelTyping(channel_id)
+            return self.post(url, nil)
         end
 
         macro event(name, payload)

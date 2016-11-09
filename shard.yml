@@ -8,4 +8,4 @@ license: MIT
 
 dependencies:
   discord-cr:
-    github: [krognol]/discord-cr
+    github: krognol/discord-cr

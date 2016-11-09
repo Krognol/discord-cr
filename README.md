@@ -1,6 +1,6 @@
 # discord-cr
 
-A Discord fro Crystal!
+A Discord library for Crystal!
 
 Still needs some refinement. What you see is not the final product.
 

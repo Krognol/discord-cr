@@ -6,7 +6,7 @@ class Webhook
         id: String,
         guild_id: String,
         channel_id: String,
-        user: User,
+        user: Users::User,
         name: String,
         avatar: String,
         token: String

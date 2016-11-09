@@ -1,7 +1,7 @@
 require "json"
 
 module Voice
-    class VoiceState
+    class State
         JSON.mapping(
             guild_id: String,
             channel_id: String,
@@ -15,12 +15,20 @@ module Voice
         )
     end
     
-    class VoiceStateUpdate
+    class StateUpdate
         JSON.mapping({
             guild_id: {type: String},
             channel_id: {type: String, nilable: true},
             self_mute: {type: Bool},
             self_deaf: {type: Bool}
+        })
+    end
+
+    class ServerUpdate
+        JSON.mapping({
+            token: {type: String},
+            guild_id: {type: String},
+            endpoint: {type: String}
         })
     end
     

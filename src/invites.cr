@@ -28,7 +28,7 @@ end
 
 class InviteMetadata
     JSON.mapping(
-        inviter: User,
+        inviter: Users::User,
         uses: Int32,
         max_uses: Int32,
         max_age: Int32,

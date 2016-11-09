@@ -27,7 +27,7 @@ module Gateway
     class Ready
         JSON.mapping({
             v: {type: Int32},
-            user: {type: User},
+            user: {type: Users::User},
             private_channels: {type: Array(Channels::DMChannel)},
             guilds: {type: Array(Guilds::UnavailableGuild)},
             session_id: {type: String},
@@ -55,12 +55,12 @@ module Gateway
 
     class Hello
         JSON.mapping(
-            hearbeat_interval: Int32,
+            heartbeat_interval: Int32,
             _trace: Array(String)
         )	
 
         def interval
-            return @hearbeat_interval
+            return @heartbeat_interval
         end
     end
 

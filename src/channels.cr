@@ -120,7 +120,7 @@ module Channels
         JSON.mapping(
             id: String,
             is_private: Bool,
-            recipient: User,
+            recipient: Users::User,
             last_message_id: String
         )
     end
@@ -129,19 +129,33 @@ module Channels
         JSON.mapping({
             id: {type: String},
             channel_id: {type: String},
-            author: {type: User},
+            author: {type: Users::User},
             content: {type: String},
             timestamp: {type: String},
             edited_timestamp: {type: String, nilable: true},
             tts: {type: Bool},
             mention_everyone: {type: Bool},
-            mentions: {type: Array(User)},
+            mentions: {type: Array(Users::User)},
             mention_roles: {type: Array(Role)},
             attachments: {type: Array(Attachment)},
             embeds: {type: Array(Embed)},
             nonce: {type: String},
             pinned: {type: Bool},
             webhook_id: {type: String, defualt: "", nilable: true}
+        })
+    end
+
+    class MessageDelete
+        JSON.mapping({
+            id: {type: String},
+            channel_id: {type: String}
+        })
+    end
+
+    class MessageDeleteBulk
+        JSON.mapping({
+            ids: {type: Array(String)},
+            channel_id: {type: String}
         })
     end
 end

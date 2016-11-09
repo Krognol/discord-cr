@@ -127,19 +127,17 @@ module Discord
                 op = js["op"].as_i
                 d = js["d"]
                 
-                if js["s"].as_i?.not_nil!
+                if js["s"].as_i? != nil
                     @seq = js["s"].as_i
                 end
                 
-                logInfo("Got op code '#{op.to_s}'")
-
-                if op == Gateway::HELLO
-                    hello = Gateway::Hello.from_json(js.to_s)
+                if op == Gateway::HELLO                    
+                    hello = Gateway::Hello.from_json(d.to_json)
                     setupHeartbeats(hello)
                 end
                 
                 if op == Gateway::RECONNECT
-                    logWarning("Got reconnect event; doing nothing. Reconnecting isn't implemented yet.")
+                    wsFromClient(false)
                     return
                 end
 
@@ -169,13 +167,14 @@ module Discord
                     handleDispatch(event.as_s, d)
                 end
             rescue ex
-                logFatal(ex.message.as(String))            
+                logFatal("Error while handling socket message: #{ex.message.to_s}\r\nPayload: #{d.to_json}")            
             end
             return
         end
 
         def wsFromClient(resume : Bool)
-            @ws = HTTP::WebSocket.new(getGateway.url)
+            url = URI.parse(getGateway.url)
+            @ws = HTTP::WebSocket.new(host: url.host.not_nil!, path: "#{url.path}/?encoding=json&v=6", port: 443, tls: true)
             @ws.as(HTTP::WebSocket).on_message(&->on_message(String))
             @ws.as(HTTP::WebSocket).on_close(&->on_close(String))
             logInfo("Created a new websocket")
@@ -206,8 +205,6 @@ module Discord
             elsif token != ""
                 headers["Authorization"] = @token
             end
-                
-            
 
             if args.has_key?("json")
                 headers["Content-Type"] = "application/json"
@@ -309,7 +306,7 @@ module Discord
             return self.post(LOGOUT, nil)
         end
 
-        def privateMessage(user : User)
+        def privateMessage(user : Users::User)
             payload = HTTP::Headers.new
             payload["json"] = {"recipient_id": user.id}.to_json
             return self.post(ME+"/channels", payload)
@@ -380,11 +377,6 @@ module Discord
                 call_event status_update, payload
             end
 
-            if event == "VOICE_STATE_UPDATE"
-                payload = Voice::VoiceStateUpdate.from_json(data.to_json)
-                call_event voice_state_update, payload
-            end
-
             if event == "CHANNEL_CREATE"
                 payload = (Channels::DMChannel.from_json(data.to_json) || Channels::GuildChannel.from_json(data.to_json))
                 call_event channel_create, payload
@@ -393,11 +385,6 @@ module Discord
             if event == "CHANNEL_UPDATE"
                 payload = Channels::GuildChannel.from_json(data.to_json)
                 call_event channel_update, payload
-            end
-
-            if event == "MESSAGE_CREATE"
-                payload = Channels::Message.from_json(data.to_json)
-                call_event message_create, payload
             end
 
             if event == "GUILD_CREATE"
@@ -416,18 +403,103 @@ module Discord
             end
 
             if event == "GUILD_BAN_ADD"
-                payload = User.from_json(data.to_json)
+                payload = Users::User.from_json(data.to_json)
                 call_event guild_ban_add, payload
             end
 
             if event == "GUILD_BAN_REMOVE"
-                payload = User.from_json(data.to_json)
+                payload = Users::User.from_json(data.to_json)
                 call_event guild_ban_remove, payload
             end
 
             if event == "GUILD_EMOJIS_UPDATE"
                 payload = Guilds::EmojisUpdate.from_json(data.to_json)
                 call_event guild_emojis_update, payload
+            end
+
+            if event == "GUILD_INTEGRATIONS_UPDATE"
+                payload = Guilds::IntegrationsUpdate.from_json(data.to_json)
+                call_event guild_integrations_update, payload 
+            end
+
+            if event == "GUILD_MEMBER_ADD"
+                payload = Guilds::GuildMember.from_json(data.to_json)
+                call_event guild_member_add, payload
+            end
+
+            if event == "GUILD_MEMBER_REMOVE"
+                payload = Guilds::MemberRemove.from_json(data.to_json)
+                call_event guild_member_remove, payload
+            end
+
+            if event == "GUILD_MEMBER_UPDATE"
+                payload = Guilds::MemberUpdate.from_json(data.to_json)
+                call_event guild_member_update, payload
+            end
+
+            if event == "GUILD_MEMBERS_CHUNK"
+                payload = Guilds::MembersChunk.from_json(data.to_json)
+                call_event guild_members_chunk, payload
+            end
+
+            if event == "GUILD_ROLE_CREATE"
+                payload = Guilds::RoleCreate.from_json(data.to_json)
+                call_event guild_role_create, payload
+            end
+
+            if event == "GUILD_ROLE_UPDATE"
+                payload = Guilds::RoleUpdate.from_json(data.to_json)
+                call_event guild_role_update, payload
+            end
+
+            if event == "GUILD_ROLE_DELETE"
+                payload = Guilds::RoleDelete.from_json(data.to_json)
+                call_event guild_role_delete, payload
+            end
+
+            if event == "MESSAGE_CREATE"
+                payload = Channels::Message.from_json(data.to_json)
+                call_event message_create, payload
+            end
+
+            if event == "MESSAGE_UPDATE"
+                payload = Channels::Message.from_json(data.to_json)
+                call_event message_update, payload
+            end
+
+            if event == "MESSAGE_DELETE"
+                payload = Channels::MessageDelete.from_json(data.to_json)
+                call_event message_delete, payload
+            end
+
+            if event == "MESSAGE_DELETE_BULK"
+                payload = Channels::MessageDeleteBulk.from_json(data.to_json)
+                call_event message_delete_bulk, payload
+            end
+
+            if event == "PRESENCE_UPDATE"
+                payload = Users::PresenceUpdate.from_json(data.to_json)
+                call_event presence_update, payload
+            end
+
+            if event == "TYPING_START"
+                payload = Users::TypingStart.from_json(data.to_json)
+                call_event typing_start, payload
+            end
+
+            if event == "USER_SETTINGS_UPDATE"
+                # Something is supposed to happen here
+                # the user settings object isn't documented, skipping
+            end
+
+            if event == "VOICE_STATE_UPDATE"
+                payload = Voice::StateUpdate.from_json(data.to_json)
+                call_event voice_state_update, payload
+            end
+
+            if event == "VOICE_SERVER_UPDATE"
+                payload = Voice::ServerUpdate.from_json(data.to_json)
+                call_event voice_server_update, payload
             end
         end
 
@@ -453,19 +525,34 @@ module Discord
             end
         end
 
-        event message_create, Channels::Message
         event ready, Gateway::Ready
         event resume, Gateway::Resume
         event status_update, Gateway::StatusUpdate
-        event voice_state_update, Voice::VoiceStateUpdate
         event channel_create, (Channels::DMChannel | Channels::GuildChannel)
         event channel_update, Channels::GuildChannel
         event guild_create, Guilds::Guild
         event guild_update, Guilds::Guild
         event guild_delete, Guilds::Guild
-        event guild_ban_add, User
-        event guild_ban_remove, User
+        event guild_ban_add, Users::User
+        event guild_ban_remove, Users::User
         event guild_emojis_update, Guilds::EmojisUpdate
-
+        event guild_integrations_update, Guilds::IntegrationsUpdate
+        event guild_member_add, Guilds::GuildMember
+        event guild_member_remove, Guilds::MemberRemove
+        event guild_member_update, Guilds::MemberUpdate
+        event guild_members_chunk, Guilds::MembersChunk
+        event guild_role_create, Guilds::RoleCreate
+        event guild_role_update, Guilds::RoleUpdate
+        event guild_role_delete, Guilds::RoleDelete
+        event message_create, Channels::Message
+        event message_update, Channels::Message
+        event message_delete, Channels::MessageDelete
+        event message_delete_bulk, Channels::MessageDeleteBulk
+        event presence_update, Users::PresenceUpdate
+        event typing_start, Users::TypingStart
+        event user_settings_update, Users::SettingsUpdate
+        event user_update, Users::User
+        event voice_state_update, Voice::StateUpdate
+        event voice_server_update, Voice::ServerUpdate
     end
 end

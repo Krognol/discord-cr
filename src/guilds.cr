@@ -40,15 +40,64 @@ module Guilds
             role_id: String,
             expire_behavior: Int32,
             expire_grace_perion: Int32,
-            user: User,
+            user: Users::User,
             account: IntegrationAccount,
             synced_at: String
         )
     end
 
+    class IntegrationsUpdate
+        JSON.mapping({
+            guild_id: {type: String}
+        })
+    end
+
+    class MemberRemove
+        JSON.mapping({
+            guild_id: {type: String},
+            user: {type: Users::User}
+        })
+    end
+
+    class MemberUpdate
+        JSON.mapping({
+            guild_id: {type: String},
+            roles: {type: Array(Role)},
+            user: {type: Users::User}
+        })
+    end
+
+    class MembersChunk
+        JSON.mapping({
+            guild_id: {type: String},
+            members: {type: Array(GuildMember)}
+        })
+    end
+
+    class RoleCreate
+        JSON.mapping({
+            guild_id: {type: String},
+            role: {type: Role}
+        })
+    end
+
+    class RoleUpdate
+        JSON.mapping({
+            guild_id: {type: String},
+            role: {type: Role}
+        })
+    end
+
+    class RoleDelete
+        JSON.mapping({
+            guild_id: {type: String},
+            role_id: {type: String}
+        })
+    end
+
     class GuildMember
         JSON.mapping(
-            user: User,
+            user: Users::User,
             nick: String,
             roles: Array(Role),
             joined_at: String,
@@ -79,7 +128,7 @@ module Guilds
             large: Bool,
             unavailable: Bool,
             member_count: Int32,
-            voice_states: Array(Voice::VoiceState),
+            voice_states: Array(Voice::State),
             members: Array(GuildMember),
             channels: Array(Channels::GuildChannel),
             #presences: Array(Presence)

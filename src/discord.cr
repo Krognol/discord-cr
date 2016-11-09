@@ -53,7 +53,7 @@ module Discord
     class Client
         @user_agent : String
         @hold_up : Float64
-        def initialize(@connector : String, @session : HTTP::Client, @token : String, @bot_token : String)
+        def initialize(@token : String, @bot_token : String)
             user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
             @user_agent = user_agent
             @ws = HTTP::WebSocket
@@ -292,16 +292,7 @@ module Discord
             data = self.post(LOGIN, HTTP::Headers.new).as(JSON::Any)
             self._token("", data["token"].as_s)
         end
-
-        def staticLogin(token : String, bot : String)
-            old_token = @token
-            old_bot = @bot_token
-            self._token(token, bot)
-
-            data = self.get(ME, nil).as(JSON::Any)
-            return data
-        end
-
+        
         def logout
             return self.post(LOGOUT, nil)
         end

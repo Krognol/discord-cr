@@ -100,29 +100,21 @@ module Channels
         )
     end
 
-    class GuildChannel
-        JSON.mapping(
-            id: String,
-            guild_id: String,
-            name: String,
-            type: String,
-            position: Int32,
-            is_private: Bool,
-            permission_overwrites: Array(Overwrite),
-            topic: String,
-            last_message_id: String,
-            bitrate: Int32,
-            user_limit: Int32
-        )
-    end
-
-    class DMChannel
-        JSON.mapping(
-            id: String,
-            is_private: Bool,
-            recipient: Users::User,
-            last_message_id: String
-        )
+    class Channel
+        JSON.mapping({
+            id: {type: String},
+            guild_id: {type: String},
+            name: {type: String},
+            type: {type: String},
+            position: {type: Int32},
+            is_private: {type: Bool},
+            permission_overwrites: {type: Array(Overwrite)},
+            topic: {type: String},
+            last_message_id: {type: String},
+            bitrate: {type: Int32},
+            user_limit: {type: Int32},
+            recipient: {type: Users::User, nilable: true}
+        })
     end
 
     class Message

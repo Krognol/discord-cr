@@ -27,13 +27,6 @@ module Invites
         )
     end
 
-    class Invite
-        JSON.mapping(
-            code: String,
-            guild: InviteGuild,
-            channel: InviteChannel
-        )
-    end
 
     class InviteMetadata
         JSON.mapping(

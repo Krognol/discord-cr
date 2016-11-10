@@ -26,14 +26,6 @@ def logRequest(text : String)
     puts "[REQUEST]".colorize(:light_blue).toggle(true).to_s + " :: " + text + "\r\n"
 end
 
-def jsonOrText(res : HTTP::Client::Response)    
-    if res.headers["content-type"] == "application/json"
-        js = JSON.parse(res.body.to_json)
-        return js
-    end
-    return res.body.to_s
-end
-
 module Discord
     class Client
         @hold_up : Float64

@@ -130,7 +130,7 @@ module Guilds
             member_count: Int32,
             voice_states: Array(Voice::State),
             members: Array(GuildMember),
-            channels: Array(Channels::GuildChannel),
+            channels: Array(Channels::Channel),
             #presences: Array(Presence)
         )
     end

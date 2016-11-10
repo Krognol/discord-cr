@@ -9,13 +9,15 @@ module RestAPI
     class API
         def initialize(@user_agent : String, @client : Discord::Client)
         end
-        def request(client : Discord::Client, method : String, url : String, args : HTTP::Headers)
+
+        
+        def request(method : String, url : String, args : HTTP::Headers)
             headers = HTTP::Headers{"User-Agent" => @user_agent, "Content-Type" => "application/json"}
 
-            if client.bot_token != ""            
-                headers["Authorization"] = client.bot_token
-            elsif client.token != ""
-                headers["Authorization"] = client.token
+            if @client.bot_token != ""            
+                headers["Authorization"] = @client.bot_token
+            elsif @client.token != ""
+                headers["Authorization"] = @client.token
             end
 
             res = nil
@@ -34,7 +36,7 @@ module RestAPI
             end
 
             if res.status_code == 429
-                dat = data.as(JSON::Any)
+                dat = data
                 d = dat["retry_after"].to_s
                 i = d.to_i
                 i = i / 1000
@@ -81,22 +83,8 @@ module RestAPI
             return request("POST", url, headers)
         end
 
-        def close(client :: Discord::Client)
-            client.session.close
-        end
-        
-        def sendPrivateMessage(user : Users::User)
-            payload = HTTP::Headers.new
-            payload["json"] = {"recipient_id": user.id}.to_json
-            return post(EndpointMe + "/channels", payload)
-        end
-
-        def sendMessage(channel : String, msg : String, guild : String, tts : Bool)
-            url = channelMessages(channel)
-            r = Random.new                
-            payload = HTTP::Headers.new
-            payload["json"] = {"content" => msg, "nonce" => r.next_int.to_s, "tts": tts}.to_json
-            return post(url, payload)
+        def close
+            @client.session.close
         end
 
         def emailLogin(email : String, password : String)
@@ -107,8 +95,16 @@ module RestAPI
         end
 
         def botLogin
-            data = post(EndpointLogin, HTTP::Headers.new).as(JSON::Any)
-            @client._token("", data["token"].as_s)
+            data = post(EndpointLogin, HTTP::Headers.new)
+            if data.is_a?(JSON::Any)
+                begin
+                    @client._token("", data["token"].as_s)
+                rescue ex
+                    logFatal("I don't know why this catches an exception, it still works tho")
+                end
+            else
+                logFatal("Error while logging in: #{data}")
+            end
         end
         
         def logout
@@ -123,7 +119,7 @@ module RestAPI
         end
 
         def user(uid : String)
-            res = get(EndpointUser(uid), HTTP::Headers.new)
+            res = get(user(uid), HTTP::Headers.new)
             return Users::User.from_json(res.to_json)
         end
 
@@ -140,31 +136,31 @@ module RestAPI
         end        
 
         def userSettings
-            res = get(EndpointUserSettings("@me"), HTTP::Headers.new)
+            res = get(userSettings("@me"), HTTP::Headers.new)
             return Users::Settings.from_json(res.to_json)
         end
 
         def userChannels
-            res = get(EndpointUserChannels("@me"), HTTP::Headers.new)
-            return Array(Channels::DMChannel).from_json(res.to_json)
+            res = get(userChannels("@me"), HTTP::Headers.new)
+            return Array(Channels::Channel).from_json(res.to_json)
         end
 
         def userChannelCreate(recipient : String)
             payload = HTTP::Headers.new
             payload["json"] = {"recipient_id": recipient}.to_json
-            res = post(EndpointUserChannels("@me"), payload)
-            return Channels::DMChannel.from_json(res.to_json)
+            res = post(userChannels("@me"), payload)
+            return Channels::Channel.from_json(res.to_json)
         end
 
         def userGuilds
-            res = get(EndpointUserGuilds("@me"), HTTP::Headers.new)
-            return Array(Channels::GuildChannel).from_json(res.to_json)
+            res = get(userGuilds("@me"), HTTP::Headers.new)
+            return Array(Channels::Channel).from_json(res.to_json)
         end
 
         def userGuildSettings(gid : String, settings : Users::GuildSettingsEdit)
             payload = HTTP::Headers.new
             payload["json"] = settings.to_json
-            res = patch(EndpointUserGuildSettings("@me"), payload)
+            res = patch(userGuildSettings("@me"), payload)
             return Users::GuildSettings.from_json(res.to_json)
         end
 
@@ -173,7 +169,7 @@ module RestAPI
         end
 
         def guild(gid : String)
-            res = get(EndpointGuild(gid), HTTP::Headers.new)
+            res = get(guild(gid), HTTP::Headers.new)
             return Guilds::Guild.from_json(res.to_json)
         end
 
@@ -190,21 +186,21 @@ module RestAPI
         end
 
         def guildDelete(gid : String)
-            res = delete(EndpointGuild(gid), HTTP::Headers.new)
+            res = delete(guild(gid), HTTP::Headers.new)
             return Guilds::Guild.from_json(res.to_json)
         end
 
         def guildLeave(gid : String)
-            return delete(EndponitUserGuild("@me", gid), HTTP::Headers.new)
+            return delete(userGuild("@me", gid), HTTP::Headers.new)
         end
 
         def guildBans(gid : String)
-            res = get(EndpointGuildBans(gid), HTTP::Headers.new)
+            res = get(guildBans(gid), HTTP::Headers.new)
             return Array(Users::User).from_json(res.to_json)
         end
 
         def guildBanCreate(gid, uid : String, days : Int32)
-            uri = EndpointGuildBan(gid, uid)
+            uri = guildBan(gid, uid)
 
             if days > 0
                 uri = "#{uri}?delete-message-days=#{days.to_s}"
@@ -214,12 +210,12 @@ module RestAPI
         end
 
         def guildBanDelete(gid, uid : String)
-            return delete(EndpointGuildBan(gid, uid), HTTP::Headers.new)
+            return delete(guildBan(gid, uid), HTTP::Headers.new)
         end
 
         def guildMembers(gid : String, offset, limit : Int32)
-            uri = EndpointGuildMembers(gid)
-            vals = {}
+            uri = guildMembers(gid)
+            vals = {} of String => String
             if offset > 0
                 vals["offset"] = offset.to_s
             end
@@ -238,63 +234,63 @@ module RestAPI
         end
 
         def guildMember(gid, uid : String)
-            res = get(EndpointGuildMember(gid, uid), HTTP::Headers.new)
+            res = get(guildMember(gid, uid), HTTP::Headers.new)
             return Guilds::GuildMember.from_json(res.to_json)
         end
 
         def guildMemberDelete(gid, uid : String)
-            return delete(EndpointGuildMember(gid, uid), HTTP::Headers.new)
+            return delete(guildMember(gid, uid), HTTP::Headers.new)
         end
 
         def guildMemberEdit(gid, uid : String, roles : Array(String))
             payload = HTTP::Headers.new
             payload["json"] = {"roles": roles}.to_json
-            return patch(EndpointGuildMember(gid, uid), payload)
+            return patch(guildMember(gid, uid), payload)
         end
 
         def guildMemberMove(gid, uid, cid : String)
             payload = HTTP::Headers.new
             payload["json"] = {"channel_id": cid}.to_json
 
-            return patch(EndpointGuildMember(gid, uid), payload)
+            return patch(guildMember(gid, uid), payload)
         end
 
         def guildMemberNickname(gid, uid, nick : String)
             payload = HTTP::Headers.new
             payload["json"] = {"nick": nick}.to_json
-            return patch(EndpointGuildMember(gid, uid), payload)
+            return patch(guildMember(gid, uid), payload)
         end
 
         def guildChannels(gid : String)
-            res = get(EndpointGuildChannels(gid), HTTP::Headers.new)
-            return Array(Channels::GuildChannel).from_json(res.to_json)
+            res = get(guildChannels(gid), HTTP::Headers.new)
+            return Array(Channels::Channel).from_json(res.to_json)
         end
 
         def guildChannelCreate(gid, name, ctype : String)
             payload = HTTP::Headers.new
             payload["json"] = {"name": name, "type": ctype}.to_json
-            res = post(EndpointGuildChannels(gid), payload)
-            return Channels::GuildChannel.from_json(res.to_json)
+            res = post(guildChannels(gid), payload)
+            return Channels::Channel.from_json(res.to_json)
         end
 
-        def guildChannelsReorder(gid : String, chans : Array(Channels::GuildChannel))
-            payload = HTTP::Headers.new{"json" => chans.to_json}
-            
-            return patch(EndpointGuildChannels(gid), payload)
+        def guildChannelsReorder(gid : String, chans : Array(Channels::Channel))
+            payload = HTTP::Headers.new
+            payload["json"] = chans.to_json
+            return patch(guildChannels(gid), payload)
         end
 
         def guildInvites(gid : String)
-            res = get(EndpointGuildInvites(gid), HTTP::Headers.new)
+            res = get(guildInvites(gid), HTTP::Headers.new)
             return Array(Invites::Invite).from_json(res.to_json)
         end
 
         def guildRoles(gid : String)
-            res = get(EndpointGuildRoles(gid), HTTP::Headers.new)
+            res = get(guildRoles(gid), HTTP::Headers.new)
             return Array(Role).from_json(res.to_json)
         end
 
         def guildRoleCreate(gid : String)
-            res = post(EndpointGuildRoles(gid), HTTP::Headers.new)
+            res = post(guildRoles(gid), HTTP::Headers.new)
             return Role.from_json(res.to_json)
         end
 
@@ -306,9 +302,216 @@ module RestAPI
 
             payload = HTTP::Headers.new
             payload["json"] = {"name": name, "color": color, "hoist": hoist, "permissions" : perm}.to_json
-            res = patch(EndpointGuildRole(gid, rid), payload)
+            res = patch(guildRole(gid, rid), payload)
             return Role.from_json(res.to_json)
         end
         
+        def guildRoleReorder(gid : String, roles : Array(Role))
+            payload = HTTP::Headers.new
+            payload["json"] = roles.to_json
+            res = patch(guildRoles(gid), payload)
+            return Array(Role).from_json(res.to_json)
+        end
+
+        def guildRoleDelete(gid, rid : String)
+            return delete(guildRole(gid, rid), HTTP::Headers.new)
+        end
+
+        def guildIntegrations(gid : String)
+            res = get(guildIntegrations(gid), HTTP::Headers.new)
+            return Array(Guilds::Integration).from_json(res.to_json)
+        end
+
+        def guildIntegrationCreate(gid, itype, iid : String)
+            payload = HTTP::Headers.new
+            payload["json"] = {"type": itype, "id": iid}.to_json
+            return post(guildIntegrations(gid), payload)
+        end
+
+        def guildIntegrationsEdit(gid, iid : String, expire, grace : Int32, emotes : Bool)
+            payload = HTTP::Headers.new
+            payload["json"] = {"expire_behavior": expire, "expire_grace_period": grace, "enable_emoticons": emotes}.to_json
+            return patch(guildIntegration(gid, iid), payload)
+        end
+
+        def guildIntegrationDelete(gid, iid : String)
+            return delete(guildIntegration(gid, iid), HTTP::Headers.new)
+        end
+
+        def guildIcon(gid : String)
+            # not implemented yet
+        end
+
+        def guildSplash(gid : String)
+            # not implemented yet
+        end
+
+        def guildEmbed(gid : String)
+            res = get(guildEmbed(gid), HTTP::Headers.new)
+            return Guilds::GuildEmbed.from_json(res.to_json)
+        end
+
+        def guildEmbedEdit(gid : String, enabled : Bool, channel : String)
+            payload = HTTP::Headers.new
+            payload["json"] = {"enabled": enabled, "channel_id": channel}.to_json
+            return patch(guildEmbed(gid), payload)
+        end
+
+        def channel(cid : String)
+            res = get(channel(cid), HTTP::Headers.new)
+            return Channels::Channel.from_json(res.to_json) 
+        end
+
+        def channelEdit(cid, name : String)
+            payload = HTTP::Headers.new
+            payload["json"] = {"name": name}.to_json
+            res = patch(channel(cid), payload)
+            return Channels::Channel.from_json(res.to_json)
+        end
+
+        def channelDelete(cid : String)
+            res = delete(channel(cid), HTTP::Headers.new)
+            return Channels::Channel.from_json(res.to_json)
+        end
+
+        def channelTyping(cid : String)
+            return post(channelTyping(cid), HTTP::Headers.new)
+        end
+
+        def channelMessages(cid : String, limit : Int32, before, after : String)
+            uri = channelMessages(cid)
+            v = {} of String => String
+            if limit > 0
+                v["limit"] = limit.to_s
+            end
+
+            if after != ""
+                v["after"] = after
+            end
+
+            if before != ""
+                v["before"] = before
+            end
+
+            if v.size > 0
+                uri = "#{uri}?#{URI.escape(v)}"
+            end
+
+            res = get(uri, HTTP::Headers.new)
+            return Array(Channels::Message).from_json(res.to_json)
+        end
+
+        def channelMessage(cid, mid : String)
+            res = get(channelMessage(cid, mid), HTTP::Headers.new)
+            return Channels::Message.from_json(res.to_json)
+        end
+
+        def channelMessageAck(cid, mid : String)
+            return post(channelMessageAck(cid, mid), HTTP::Headers.new)
+        end 
+
+        private def channelMessageSend(cid, content : String, tts : Bool)
+            payload = HTTP::Headers.new
+            payload["json"] = {"content": content, "tts": tts}.to_json
+            res = post(channelMessages(cid), payload)
+            return Channels::Message.from_json(res.to_json)
+        end
+
+        def sendMessage(cid, content : String)
+            return channelMessageSend(cid, content, false)
+        end
+
+        def sendTTSMessage(cid, content : String)
+            return channelMessageSend(cid, content, true)
+        end
+
+        def channelMessageEdit(cid, mid, content : String)
+            payload = HTTP::Headers.new
+            payload["json"] = {"content": content}.to_json
+            res = patch(channelMessage(cid, mid), payload)
+            return Channels::Message.from_json(res.to_json)
+        end
+
+        def channelMessageDelete(cid, mid : String)
+            return delete(channelMessage(cid, mid), payload)
+        end
+
+        def channelMessagesBulkDelete(cid : String, messages : Array(String))
+            if messages.size == 0
+                return
+            end
+
+            if messages.size == 1
+                return channelMessageDelete(cid, messages[0])
+            end
+
+            if messages.size > 100
+                until messages.size == 100
+                    messages.chomp
+                end
+            end
+            payload = HTTP::Headers.new
+            payload["json"] = {"messages": messages}.to_json
+            return post(channelMessagesBulkDelete(cid), payload)
+        end
+
+        def channelMessagePin(cid, mid : String)
+            return put(channelMessagePin(cid, mid), HTTP::Headers.new)
+        end
+
+        def channelMessageUnpin(cid, mid : String)
+            return delete(channelMessagePin(cid, mid), HTTP::Headers.new)
+        end
+
+        def channelMessagesPinned(cid : String)
+            res = get(channelMessagesPins(cid), HTTP::Headers.new)
+            return Array(Channels::Message).from_json(res.to_json)
+        end
+
+        def channelFileSend()
+            # not implemented yet
+        end
+
+        def channelInvites(cid : String)
+            res = get(channelInvites(cid), HTTP::Headers.new)
+            return Array(Invites::Invite).from_json(res.to_json)
+        end
+
+        def channelInviteCreate(cid : String, i : Invites::InviteMetadata, xkcd : Bool)
+            payload = HTTP::Headers.new
+            payload["json"] = {"max_age": i.max_age, "max_uses": i.max_uses, "temporary": i.temporary, "xkcdpass": xkcd}.to_json
+            res = post(channelInvites(cid), payload)
+            return Invites::Invite.from_json(res.to_json)
+        end
+
+        def channelPermissionsSet(cid, tid, ttype : String, allow, deny : Int32)
+            payload = HTTP::Headers.new
+            payload["json"] = {"id": tid, "type": ttype, "allow": allow, "deny": deny}.to_json
+            return put(channelPermission(cid, tid), payload)
+        end
+
+        def invite(iid : String)
+            res = get(invite(iid), HTTP::Headers.new)
+            return Invites::Invite.from_json(res.to_json)
+        end
+
+        def inviteDelete(iid : String)
+            res = delete(invite(iid), HTTP::Headers.new)
+            return Invites::Invite.from_json(res.to_json)
+        end
+
+        def inviteAccept(iid : String)
+            res = post(invite(iid), HTTP::Headers.new)
+            return Invites::Invite.from_json(res.to_json)
+        end
+
+        def voiceRegions
+            res = get(EndpointVoiceRegions, HTTP::Headers.new)
+            return Array(Voice::VoiceRegion).from_json(res.to_json)
+        end
+
+        def voiceICE
+            # not implemented yet
+        end
     end
 end

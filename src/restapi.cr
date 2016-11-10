@@ -10,6 +10,14 @@ module RestAPI
         def initialize(@user_agent : String, @client : Discord::Client)
         end
 
+        private def jsonOrText(res : HTTP::Client::Response)    
+            if res.headers["content-type"] == "application/json"
+                js = JSON.parse(res.body.to_json)
+                return js
+            end
+            return res.body.to_json
+        end
+
         
         def request(method : String, url : String, args : HTTP::Headers)
             headers = HTTP::Headers{"User-Agent" => @user_agent, "Content-Type" => "application/json"}
@@ -52,15 +60,15 @@ module RestAPI
             end
 
             if res.status_code == 403
-                logWarning("Access forbidden #{data}")
+                logWarning("Access forbidden")
             elsif res.status_code == 404
-                logWarning("Page not found #{data}")
+                logWarning("Page not found")
             elsif res.status_code == 401
-                logWarning("Unauthorized #{data}")
+                logWarning("Unauthorized")
             else
-                logWarning("Unknown HTTP error #{data}")
+                logWarning("Unknown HTTP error")
             end
-            
+            return data
         end
 
         def get(url : String, headers : HTTP::Headers)
@@ -97,13 +105,11 @@ module RestAPI
         def botLogin
             data = post(EndpointLogin, HTTP::Headers.new)
             if data.is_a?(JSON::Any)
-                begin
-                    @client._token("", data["token"].as_s)
-                rescue ex
-                    logFatal("I don't know why this catches an exception, it still works tho")
-                end
+                # Seems like a really weird hack
+                # Will try to find a better solution
+                @client._token("", JSON.parse(data.to_s)["token"].as_s)
             else
-                logFatal("Error while logging in: #{data}")
+                logFatal("Error while logging in as a bot")
             end
         end
         

@@ -28,7 +28,7 @@ module Gateway
         JSON.mapping({
             v: {type: Int32},
             user: {type: Users::User},
-            private_channels: {type: Array(Channels::DMChannel)},
+            private_channels: {type: Array(Channels::Channel)},
             guilds: {type: Array(Guilds::UnavailableGuild)},
             session_id: {type: String},
             #presences: {type: Array(Presence)},

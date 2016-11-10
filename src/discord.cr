@@ -29,7 +29,6 @@ end
 def jsonOrText(res : HTTP::Client::Response)    
     if res.headers["content-type"] == "application/json"
         js = JSON.parse(res.body.to_json)
-        logInfo("Response: #{js}")
         return js
     end
     return res.body.to_s
@@ -38,13 +37,33 @@ end
 module Discord
     class Client
         @hold_up : Float64
-        @api : RestAPI::API
         def initialize(@token : String, @bot_token : String)
             @ws = HTTP::WebSocket
             @hold_up = 1.0
+            n(self)
             @api = RestAPI::API.new("DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)", self)
         end
         
+        def n(a)
+            a.token
+        end
+
+        def api
+            return @api.as(RestAPI::API)
+        end
+
+        def token
+            return @token
+        end
+
+        def bot_token
+            return @bot_token
+        end
+
+        def setupApi
+            @api = RestAPI::API.new("DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)", self)
+        end
+
         def getGateway
             response = HTTP::Client.get(EndpointGateway)
             return Gateway::Gateway.from_json(response.body)
@@ -211,10 +230,10 @@ module Discord
                     payload = Gateway::StatusUpdate.from_json(data.to_json)
                     call_event status_update, payload
                 when "CHANNEL_CREATE"
-                    payload = (Channels::DMChannel.from_json(data.to_json) || Channels::GuildChannel.from_json(data.to_json))
+                    payload = Channels::Channel.from_json(data.to_json)
                     call_event channel_create, payload
                 when "CHANNEL_UPDATE"
-                    payload = Channels::GuildChannel.from_json(data.to_json)
+                    payload = Channels::Channel.from_json(data.to_json)
                     call_event channel_update, payload
                 when "GUILD_CREATE"
                     payload = Guilds::Guild.from_json(data.to_json)
@@ -288,7 +307,8 @@ module Discord
             end
         end
 
-        def connect        
+        def connect
+            #self.setupApi
             wsFromClient(false)
             self.run
         end
@@ -304,7 +324,7 @@ module Discord
                 begin
                     handler.call({{payload}})
                 rescue ex
-                    logFatal(ex.message.to_s)
+                    logWarning("Error while calling event {{name}}: #{ex.message.to_s}")
                 end
             end
         end
@@ -312,8 +332,8 @@ module Discord
         event ready, Gateway::Ready
         event resume, Gateway::Resume
         event status_update, Gateway::StatusUpdate
-        event channel_create, (Channels::DMChannel | Channels::GuildChannel)
-        event channel_update, Channels::GuildChannel
+        event channel_create, Channels::Channel
+        event channel_update, Channels::Channel
         event guild_create, Guilds::Guild
         event guild_update, Guilds::Guild
         event guild_delete, Guilds::Guild

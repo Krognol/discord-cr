@@ -131,7 +131,7 @@ module Channels
             mention_roles: {type: Array(Role)},
             attachments: {type: Array(Attachment)},
             embeds: {type: Array(Embed)},
-            nonce: {type: String},
+            nonce: {type: String, nilable: true},
             pinned: {type: Bool},
             webhook_id: {type: String, defualt: "", nilable: true}
         })

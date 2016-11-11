@@ -1,12 +1,14 @@
 require "http"
 require "json"
 require "time"
+require "mutex"
 require "./discord"
 require "./invites"
 require "./permissions"
 
 module RestAPI
     class API
+
         def initialize(@user_agent : String, @client : Discord::Client)
         end
 
@@ -21,52 +23,53 @@ module RestAPI
         
         def request(method : String, url : String, args : HTTP::Headers)
             headers = HTTP::Headers{"User-Agent" => @user_agent, "Content-Type" => "application/json"}
-
             if @client.bot_token != ""            
                 headers["Authorization"] = @client.bot_token
             elsif @client.token != ""
                 headers["Authorization"] = @client.token
             end
-
-            res = nil
-            if args.has_key?("json")
-                logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}, Body: #{args["json"]}")
-                res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: args["json"])
-            else
-                logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}")
-                res = HTTP::Client.exec(method, URI.parse(url), headers)
-            end            
-            data = jsonOrText(res)
-
-            if 300 > res.status_code >= 200
-                logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
-                return data
-            end
-
-            if res.status_code == 429
-                dat = data
-                d = dat["retry_after"].to_s
-                i = d.to_i
-                i = i / 1000
-                logWarning("We are being rate limited. Retrying in #{i.to_s} seconds.")
-
-                spawn do
-                    sleep i.as(Int32).second
+            done = false
+            until done
+                res = nil
+                if args.has_key?("json")
+                    logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}, Body: #{args["json"]}")
+                    res = HTTP::Client.exec(method, URI.parse(url), headers: headers, body: args["json"])
+                else
+                    logRequest("Method: #{method}, Url: #{url}, Headers: #{headers.to_s}")
+                    res = HTTP::Client.exec(method, URI.parse(url), headers)
                 end
-            end
+                data = jsonOrText(res)
+                
+                if 300 > res.status_code >= 200
+                    logSuccess("#{method} #{url} with #{data} has returned #{res.status_code.to_s}")
+                    done = true
+                    return data
+                end
 
-            if res.status_code == 502
-                logWarning("Gateway unavailable")
-            end
+                if res.status_code == 429
+                    i = data.as(JSON::Any)["retry_after"].as_i
+                    i = i / 1000
+                    logWarning("We are being rate limited. Retrying in #{i.to_s} seconds.")
 
-            if res.status_code == 403
-                logWarning("Access forbidden")
-            elsif res.status_code == 404
-                logWarning("Page not found")
-            elsif res.status_code == 401
-                logWarning("Unauthorized")
-            else
-                logWarning("Unknown HTTP error")
+                    spawn do
+                        sleep i.second
+                        request(method, url, args)
+                    end
+                end
+
+                if res.status_code == 502
+                    logWarning("Gateway unavailable: #{data}")
+                end
+
+                if res.status_code == 403
+                    logWarning("Access forbidden: #{data}")
+                elsif res.status_code == 404
+                    logWarning("Page not found: #{data}")
+                elsif res.status_code == 401
+                    logWarning("Unauthorized: #{data}")
+                else
+                    logWarning("Unknown HTTP error: #{data}")
+                end
             end
             return data
         end
@@ -98,8 +101,13 @@ module RestAPI
         def emailLogin(email : String, password : String)
             payload = HTTP::Headers.new
             payload["json"] = {"email": email, "password": password}.to_json
-            data = post(EndpointLogin, payload).as(JSON::Any)        
-            @client._token(data["token"].as_s, "")
+            data = post(EndpointLogin, payload)
+            if data.is_a?(JSON::Any)
+                @client._token(JSON.parse(data.to_s)["token"].as_s, "")
+            else
+                logFatal("Error while logging in: #{data}")
+                return
+            end
         end
 
         def botLogin
@@ -109,7 +117,8 @@ module RestAPI
                 # Will try to find a better solution
                 @client._token("", JSON.parse(data.to_s)["token"].as_s)
             else
-                logFatal("Error while logging in as a bot")
+                logFatal("Error while logging in as a bot: #{data}")
+                return
             end
         end
         

@@ -1,16 +1,16 @@
 require "./discord"
+PREFIX = ">>"
 
-client = Discord::Client.new("regular token here", "Bot tokensoqiwneoiuqnriuqenriwenr")
-client.api.botLogin
-client.on_message_create do |payload|
-    case payload.content
-    when ">>"
-        client.api.sendMessage(payload.channel_id, "<<")
+def help()
+    "```Fuck you <3```"
+end
+client = Discord::Client.new("regular token here", "Bot tokens?? in MY discord bot? it's more likely than you think!")
+client.botLogin
+client.on_message_create do |message|
+    case message.content
+    when .starts_with?(PREFIX+"help")
+        client.sendMessage(message.channel_id, help())
     end
 end
 
-client.on_message_delete do |payload|
-    client.api.sendMessage(payload.channel_id, "Deleted message: #{payload.id}")
-    puts "message deleted"
-end
 client.connect

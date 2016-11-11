@@ -26,14 +26,14 @@ require "discord-cr"
 
 # Note that the "Bot " part is very important
 client = Discord::Client.new("regular token", "Bot token")
-client.api.botLogin # Requires no arguments
+client.botLogin # Requires no arguments
 # Alternatively you can use 
-# client.api.emailLogin("your email here", "your l33t p4ssword here")
+# client.emailLogin("your email here", "your l33t p4ssword here")
 
 # Register an event
 client.on_message_create do |message|
   if message.starts_with?("prefix")
-    client.api.sendMessage("Whatever you wanna send, cool beans")
+    client.sendMessage("Whatever you wanna send, cool beans")
   end
 end
 

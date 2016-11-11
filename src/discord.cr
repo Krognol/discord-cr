@@ -315,7 +315,8 @@ module Discord
                 begin
                     handler.call({{payload}})
                 rescue ex
-                    logWarning("Error while calling event {{name}}: #{ex.to_s}")
+                    # commenting error message out while trying to figure out what's going on
+                    #logWarning("Error while calling event {{name}}: #{ex.to_s}")
                 end
             end
         end

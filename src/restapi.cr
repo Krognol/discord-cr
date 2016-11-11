@@ -7,9 +7,9 @@ require "./invites"
 require "./permissions"
 
 module RestAPI
-    class API
+    module API
 
-        def initialize(@user_agent : String, @client : Discord::Client)
+        def initialize(@user_agent : String)#, @client : Discord::Client)
         end
 
         private def jsonOrText(res : HTTP::Client::Response)    
@@ -23,10 +23,10 @@ module RestAPI
         
         def request(method : String, url : String, args : HTTP::Headers)
             headers = HTTP::Headers{"User-Agent" => @user_agent, "Content-Type" => "application/json"}
-            if @client.bot_token != ""            
-                headers["Authorization"] = @client.bot_token
-            elsif @client.token != ""
-                headers["Authorization"] = @client.token
+            if @bot_token != ""            
+                headers["Authorization"] = @bot_token
+            elsif @token != ""
+                headers["Authorization"] = @token
             end
             done = false
             until done
@@ -95,7 +95,7 @@ module RestAPI
         end
 
         def close
-            @client.session.close
+            #@session.close
         end
 
         def emailLogin(email : String, password : String)
@@ -103,7 +103,7 @@ module RestAPI
             payload["json"] = {"email": email, "password": password}.to_json
             data = post(EndpointLogin, payload)
             if data.is_a?(JSON::Any)
-                @client._token(JSON.parse(data.to_s)["token"].as_s, "")
+                _token(JSON.parse(data.to_s)["token"].as_s, "")
             else
                 logFatal("Error while logging in: #{data}")
                 return
@@ -115,7 +115,7 @@ module RestAPI
             if data.is_a?(JSON::Any)
                 # Seems like a really weird hack
                 # Will try to find a better solution
-                @client._token("", JSON.parse(data.to_s)["token"].as_s)
+                _token("", JSON.parse(data.to_s)["token"].as_s)
             else
                 logFatal("Error while logging in as a bot: #{data}")
                 return
@@ -130,7 +130,7 @@ module RestAPI
             payload = HTTP::Headers.new
             payload["json"] = {"username": username}.to_json
             res = post(EndpointRegister, payload)
-            @client._token(res["token"].as_s, "")
+            _token(res["token"].as_s, "")
         end
 
         def user(uid : String)

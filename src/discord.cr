@@ -43,15 +43,15 @@ module Discord
         end
 
         def api
-            return @api.as(RestAPI::API)
+            @api.as(RestAPI::API)
         end
 
         def token
-            return @token
+            @token
         end
 
         def bot_token
-            return @bot_token
+            @bot_token
         end
 
         def setupApi
@@ -60,15 +60,15 @@ module Discord
 
         def getGateway
             response = HTTP::Client.get(EndpointGateway)
-            return Gateway::Gateway.from_json(response.body)
+            Gateway::Gateway.from_json(response.body)
         end
 
         def sendAsJson(js : String)
-            return @ws.as(HTTP::WebSocket).send(js)
+            @ws.as(HTTP::WebSocket).send(js)
         end
 
         def getHeartbeat
-            return {"op": Gateway::HEARTBEAT, "d": @seq}.to_json
+            {"op": Gateway::HEARTBEAT, "d": @seq}.to_json
         end
 
         def identify
@@ -91,7 +91,7 @@ module Discord
                             "large_threshold": 250,
                             "v": 1}
                         }.to_json
-            return self.sendAsJson(payload)
+            self.sendAsJson(payload)
         end
 
         def resume
@@ -102,7 +102,7 @@ module Discord
                 token = @token
             end
             payload = {"op": Gateway::RESUME, "d": { "seq": @seq, "session_id": @session_id, "token": token}}.to_json
-            return self.sendAsJson(payload)
+            self.sendAsJson(payload)
         end
 
         def setupHeartbeats(hello : Gateway::Hello)

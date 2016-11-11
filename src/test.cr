@@ -2,7 +2,7 @@ require "./discord"
 PREFIX = ">>"
 
 def help()
-    "```Fuck you <3```"
+    "```really rude word you <3```"
 end
 client = Discord::Client.new("regular token here", "Bot tokens?? in MY discord bot? it's more likely than you think!")
 client.botLogin

@@ -1,15 +1,16 @@
 require "./discord"
 
-client = Discord::Client.new("regular token here", "Bot muht0000k.3ns")
+client = Discord::Client.new("regular token here", "Bot tokensoqiwneoiuqnriuqenriwenr")
 client.api.botLogin
 client.on_message_create do |payload|
-    logInfo("Message recieved: #{payload.content}")
-    if payload.content.starts_with?(">>")
+    case payload.content
+    when ">>"
         client.api.sendMessage(payload.channel_id, "<<")
     end
 end
 
 client.on_message_delete do |payload|
     client.api.sendMessage(payload.channel_id, "Deleted message: #{payload.id}")
+    puts "message deleted"
 end
 client.connect

@@ -119,6 +119,7 @@ module Channels
 
     class Message
         JSON.mapping({
+            #type: {type: Int32},
             id: {type: String},
             channel_id: {type: String},
             author: {type: Users::User},

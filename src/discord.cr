@@ -300,7 +300,6 @@ module Discord
         end
 
         def connect
-            #self.setupApi
             wsFromClient(false)
             self.run
         end
@@ -316,7 +315,7 @@ module Discord
                 begin
                     handler.call({{payload}})
                 rescue ex
-                    logWarning("Error while calling event {{name}}: #{ex.message.to_s}")
+                    logWarning("Error while calling event {{name}}: #{ex.to_s}")
                 end
             end
         end

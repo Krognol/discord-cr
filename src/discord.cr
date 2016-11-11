@@ -28,12 +28,14 @@ end
 
 module Discord
     class Client
+    include RestAPI::API
         @hold_up : Float64
         def initialize(@token : String, @bot_token : String)
             @ws = HTTP::WebSocket
             @hold_up = 1.0
-            n(self)
-            @api = RestAPI::API.new("DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)", self)
+            @user_agent = "DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)"
+            #n(self)
+            #@api = RestAPI::API.new("DiscordBot (https://github.com/Krognol/discord-cr Crystal/0.19.4)", self)
         end
         
         def n(a)

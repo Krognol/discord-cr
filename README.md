@@ -1,3 +1,7 @@
+# Asdf
+
+This project is more or less abandoned. Please use [this library instead](https://github.com/meew0/discordcr).
+
 # discord-cr
 
 A Discord library for Crystal!
